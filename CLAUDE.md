@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Current state
 
-Phase 0 (project setup) is scaffolded: NestJS app, Prisma wired to a `PrismaModule`/`PrismaService`, `GET /health`, Docker/docker-compose, and CI. No Supabase project exists yet — `.env`/`.env.example` hold placeholder values, and `DATABASE_URL` points nowhere real until that manual step is done. Phase 1 (data model: `User`/`ApiKey`/`UsageLog` in `schema.prisma`) has not started — `prisma/schema.prisma` currently declares no models.
+Phase 0 (project setup) is complete: NestJS app, Prisma wired to a `PrismaModule`/`PrismaService`, `GET /health`, Docker/docker-compose, and CI. The Supabase project exists and `.env` holds real values (`.env.example` still holds placeholders for reference). Phase 1 (data model) is complete: `User`/`ApiKey`/`UsageLog` are defined in `prisma/schema.prisma`, the first migration (`prisma/migrations/20260828122259_init`) is applied to Supabase, and `prisma/seed.ts` seeds a test user + test API key (run via `pnpm exec prisma db seed`). Phase 2 (dashboard auth) has not started.
 
 When implementing, follow the phase order in `docs/development-plan.md` and update its checkboxes as steps are completed.
 
@@ -63,6 +63,7 @@ async create(createUserDto: CreateUserDto): Promise<User> {
 - **`@nestjs/config` must stay pinned to the 4.x line, not 12.x.** The 12.x release is ESM-only and fails Jest's CommonJS runner immediately on import.
 - **`prisma7.config.ts` (repo root) must stay excluded from `tsconfig.build.json`.** If TypeScript includes it in `nest build`, the inferred `rootDir` widens to the repo root and the compiled entrypoint becomes `dist/src/main.js` instead of `dist/main.js`, breaking `start:prod` and the Dockerfile's `CMD`.
 - **Corepack pins the package manager version from `package.json`'s `packageManager` field** — the Docker build copies `package.json` before running any `pnpm` command specifically so Corepack fetches the same pnpm version as local dev. Without that pin, Corepack grabs the latest pnpm, which (as of pnpm 11) enables a `minimumReleaseAge` supply-chain check by default that rejects any dependency published within roughly the last day — this silently breaks `pnpm install --frozen-lockfile` in CI/Docker whenever a transitive dependency had a same-day release.
+- **The seed command is wired via `prisma7.config.ts`'s `migrations.seed`** (`"ts-node prisma/seed.ts"`), not the legacy `package.json` `"prisma": { "seed": ... }` field — Prisma 7's config-based setup doesn't read that field. Run it with `pnpm exec prisma db seed`.
 - **`prisma init` scaffolds AI-agent "skill" reference docs** (`.claude/`, `.windsurf/`, `.agents/`, `skills-lock.json`) at the repo root as a side effect. These aren't project files — delete them if `prisma init` is ever re-run.
 
 ## Project overview

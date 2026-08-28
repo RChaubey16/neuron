@@ -11,3 +11,46 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+/// Synced lazily from Supabase `auth.users` on a user's first authenticated
+/// request — `id` is the same UUID as the `auth.users` row, not Prisma-generated.
+model User {
+  id        String   @id
+  email     String   @unique
+  createdAt DateTime @default(now())
+
+  apiKeys ApiKey[]
+}
+
+/// Only the hash of a generated key is ever stored — the raw key is returned
+/// once at creation time and never persisted or logged.
+model ApiKey {
+  id         String    @id @default(uuid())
+  userId     String
+  hashedKey  String    @unique
+  keyPrefix  String
+  name       String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
+
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  usageLogs UsageLog[]
+
+  @@index([userId])
+}
+
+/// One row per authenticated service call, written by the cross-cutting
+/// usage-logging interceptor/guard rather than by individual service modules.
+model UsageLog {
+  id        String   @id @default(uuid())
+  apiKeyId  String
+  service   String
+  endpoint  String
+  createdAt DateTime @default(now())
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
+  @@index([service, createdAt])
+}

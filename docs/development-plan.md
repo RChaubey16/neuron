@@ -18,8 +18,8 @@ services (notifications, URL shortener, and future services) behind a unified AP
 **Goal:** Empty but correctly wired project, dockerized from day one.
 
 - [x] Init NestJS project (`nest new`)
-- [ ] Create Supabase project (Postgres + Auth, Google provider enabled) — manual step, not yet done; `.env` has placeholder values until this exists
-- [x] Install & configure Prisma, point `DATABASE_URL` at Supabase Postgres (placeholder value pending real project)
+- [x] Create Supabase project (Postgres + Auth, Google provider enabled)
+- [x] Install & configure Prisma, point `DATABASE_URL` at Supabase Postgres
 - [x] Set up `.env` structure (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`, `DATABASE_URL`)
 - [x] Set up base `PrismaModule` / `PrismaService` (global module)
 - [x] Set up basic health check route (`GET /health`)
@@ -38,9 +38,9 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** All core tables exist and migrations run cleanly.
 
-- [ ] Define `User`, `ApiKey`, `UsageLog` models in `schema.prisma` (as discussed)
-- [ ] Run first Prisma migration against Supabase
-- [ ] Seed script (optional) for a test user + test API key in dev
+- [x] Define `User`, `ApiKey`, `UsageLog` models in `schema.prisma` (as discussed)
+- [x] Run first Prisma migration against Supabase
+- [x] Seed script (optional) for a test user + test API key in dev
 
 **Exit criteria:** Tables visible in Supabase dashboard; `prisma studio` works locally.
 
