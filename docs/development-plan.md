@@ -50,11 +50,11 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** A human can log in with Google and get a valid session.
 
-- [ ] Configure Google OAuth provider in Supabase Auth settings
-- [ ] Frontend (even a minimal one, or Postman/manual flow first) triggers Supabase Google login
-- [ ] On first login, sync Supabase `auth.users` record into your own `User` table (webhook or lazy-create-on-first-request)
-- [ ] Build `SupabaseJwtGuard` in NestJS — verifies the Supabase JWT on incoming dashboard requests
-- [ ] Protected test route: `GET /me` returns the logged-in user's profile
+- [x] Configure Google OAuth provider in Supabase Auth settings
+- [x] Frontend (even a minimal one, or Postman/manual flow first) triggers Supabase Google login (`scripts/manual-google-login.html`, a throwaway dev-only page)
+- [x] On first login, sync Supabase `auth.users` record into your own `User` table (lazy-create-on-first-request, via `AuthService.verifyAndSyncUser`)
+- [x] Build `SupabaseJwtGuard` in NestJS — verifies the Supabase JWT on incoming dashboard requests (against Supabase's JWKS, since this project signs tokens with an asymmetric key, not the legacy shared secret)
+- [x] Protected test route: `GET /me` returns the logged-in user's profile
 
 **Exit criteria:** Logging in via Google and hitting `GET /me` with the session token returns the correct user.
 
