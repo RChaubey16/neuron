@@ -54,6 +54,7 @@ async create(createUserDto: CreateUserDto): Promise<User> {
 - The JSDoc block goes above the method signature: a one-to-two sentence summary, a line for each exception the method can throw, then `@param`/`@returns` tags for anything not self-evident from the type signature.
 - Inline `//` comments inside the method body are still reserved for non-obvious behavior (e.g. a framework quirk like `create()` vs `save()` above) — don't restate what the code already says.
 - This applies to every method on a service class, including trivial ones — keep the JSDoc proportional (a one-line summary is fine for a one-line method).
+- Controllers return response DTOs (`class-transformer`'s `@Expose()`), never Prisma entities directly — see `src/auth/dto/user-response.dto.ts`. `main.ts` registers a global `ClassSerializerInterceptor` and `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`; new request-body DTOs should use `class-validator` decorators to get validation for free.
 
 ## Prisma / Nest gotchas specific to this repo
 

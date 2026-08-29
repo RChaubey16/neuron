@@ -28,6 +28,8 @@
     "@prisma/adapter-pg": "^7.10.0",
     "@prisma/client": "7.10.0",
     "@prisma/client-runtime-utils": "7.10.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
     "jose": "^4.15.9",
     "pg": "^8.23.0",
     "reflect-metadata": "^0.2.2",
