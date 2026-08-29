@@ -64,11 +64,11 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** Logged-in users can create, list, and revoke API keys.
 
-- [ ] `POST /api-keys` — generate key (`crypto.randomBytes`), store only the **hash**, return raw key once
-- [ ] `GET /api-keys` — list user's keys (show `keyPrefix`, `createdAt`, `lastUsedAt`, `revokedAt` — never the raw key)
-- [ ] `DELETE /api-keys/:id` — revoke (soft delete via `revokedAt`)
-- [ ] Build `ApiKeyGuard` — hashes incoming `x-api-key` header, looks up match, rejects if missing/revoked
-- [ ] Update `lastUsedAt` on successful auth (can be async/non-blocking)
+- [x] `POST /api-keys` — generate key (`crypto.randomBytes`), store only the **hash**, return raw key once
+- [x] `GET /api-keys` — list user's keys (show `keyPrefix`, `createdAt`, `lastUsedAt`, `revokedAt` — never the raw key)
+- [x] `DELETE /api-keys/:id` — revoke (soft delete via `revokedAt`)
+- [x] Build `ApiKeyGuard` — hashes incoming `x-api-key` header, looks up match, rejects if missing/revoked
+- [x] Update `lastUsedAt` on successful auth (can be async/non-blocking)
 
 **Exit criteria:** Can create a key via dashboard route, then successfully authenticate a separate request using only that key.
 
