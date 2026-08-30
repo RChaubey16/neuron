@@ -78,9 +78,9 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** Every service call is logged automatically, without cluttering service code.
 
-- [ ] Build a `UsageLoggingInterceptor` (or hook it into `ApiKeyGuard`) that writes a `UsageLog` row per request: `apiKeyId`, `service`, `endpoint`, timestamp
-- [ ] Make logging async/non-blocking (don't let logging failures break the actual request)
-- [ ] `GET /usage` (dashboard route) — basic aggregate view: calls per service, per day, per key
+- [x] Build a `UsageLoggingInterceptor` (or hook it into `ApiKeyGuard`) that writes a `UsageLog` row per request: `apiKeyId`, `service`, `endpoint`, timestamp
+- [x] Make logging async/non-blocking (don't let logging failures break the actual request)
+- [x] `GET /usage` (dashboard route) — basic aggregate view: calls per service, per day, per key
 
 **Exit criteria:** Any authenticated service call produces a `UsageLog` row automatically, and `/usage` reflects it.
 

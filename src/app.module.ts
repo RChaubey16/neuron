@@ -6,6 +6,7 @@ import { ApiKeyModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { UsageModule } from './usage/usage.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { PrismaModule } from './prisma/prisma.module';
     HealthModule,
     AuthModule,
     ApiKeyModule,
+    UsageModule,
   ],
   controllers: [AppController],
   providers: [AppService],
