@@ -105,11 +105,11 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** Second service, proving the pattern is reusable.
 
-- [ ] Add `ShortUrl` model (`code`, `originalUrl`, `apiKeyId`, `createdAt`, `clickCount`)
-- [ ] `POST /shorten` — create short code (protected by `ApiKeyGuard`)
-- [ ] `GET /:code` — public redirect endpoint (no API key needed — this one's meant to be hit by browsers)
-- [ ] Basic rate limiting on `POST /shorten` and `GET /:code` (per API key / per IP) to prevent abuse
-- [ ] Increment `clickCount` on redirect (async)
+- [x] Add `ShortUrl` model (`code`, `originalUrl`, `apiKeyId`, `createdAt`, `clickCount`)
+- [x] `POST /shorten` — create short code (protected by `ApiKeyGuard`)
+- [x] `GET /:code` — public redirect endpoint (no API key needed — this one's meant to be hit by browsers)
+- [x] Basic rate limiting on `POST /shorten` and `GET /:code` (per API key / per IP) to prevent abuse
+- [x] Increment `clickCount` on redirect (async)
 
 **Exit criteria:** Can shorten a URL via API, then visiting the short link redirects correctly and increments the counter.
 

@@ -36,6 +36,7 @@ model ApiKey {
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageLogs UsageLog[]
+  shortUrls ShortUrl[]
 
   @@index([userId])
 }
@@ -53,4 +54,19 @@ model UsageLog {
 
   @@index([apiKeyId])
   @@index([service, createdAt])
+}
+
+/// A shortened URL. `code` is the public-facing identifier used in the
+/// unauthenticated `GET /:code` redirect route.
+model ShortUrl {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  originalUrl String
+  apiKeyId    String
+  createdAt   DateTime @default(now())
+  clickCount  Int      @default(0)
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
 }
