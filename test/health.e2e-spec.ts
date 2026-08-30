@@ -26,4 +26,12 @@ describe('HealthController (e2e)', () => {
       .expect(200)
       .expect({ status: 'ok' });
   });
+
+  it('/health (GET) is not rate-limited by the global throttler', async () => {
+    // Global default is 20 requests/60s — health checks (liveness probes,
+    // uptime monitors) must stay exempt so they're never mistaken for abuse.
+    for (let i = 0; i < 25; i++) {
+      await request(app.getHttpServer()).get('/health').expect(200);
+    }
+  });
 });
