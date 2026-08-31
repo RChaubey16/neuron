@@ -1,16 +1,11 @@
 import { Controller, Get, INestApplication, UseGuards } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { jwtVerify } from 'jose';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { ApiKeyGuard } from './../src/api-keys/guards/api-key.guard';
-
-jest.mock('jose', () => ({
-  createRemoteJWKSet: jest.fn(() => 'mock-jwks'),
-  jwtVerify: jest.fn(),
-}));
 
 // Proves ApiKeyGuard works end-to-end without adding an unused production
 // route — real service routes start consuming it from Phase 5 onward.
@@ -25,10 +20,10 @@ class TestServiceController {
 
 describe('ApiKeyController (e2e)', () => {
   let app: INestApplication<App>;
-  const mockJwtVerify = jwtVerify as jest.Mock;
+  const jwtServiceMock = { verifyAsync: jest.fn() };
   const user = { id: 'user-1', email: 'user@example.com' };
   const prismaMock = {
-    user: { upsert: jest.fn() },
+    user: { findUniqueOrThrow: jest.fn() },
     apiKey: {
       create: jest.fn(),
       findMany: jest.fn(),
@@ -38,10 +33,11 @@ describe('ApiKeyController (e2e)', () => {
   };
 
   beforeEach(async () => {
-    mockJwtVerify.mockResolvedValue({
-      payload: { sub: user.id, email: user.email },
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      email: user.email,
     });
-    prismaMock.user.upsert.mockResolvedValue(user);
+    prismaMock.user.findUniqueOrThrow.mockResolvedValue(user);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
@@ -49,6 +45,8 @@ describe('ApiKeyController (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(JwtService)
+      .useValue(jwtServiceMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
