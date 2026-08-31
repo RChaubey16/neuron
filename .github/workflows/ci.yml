@@ -9,13 +9,18 @@ on:
 jobs:
   lint-and-build:
     runs-on: ubuntu-latest
-    # Tests never hit a real database or Supabase project (PrismaService and
-    # jose's JWKS fetch are always mocked/overridden in unit and e2e specs)
-    # — these only need to be present and well-formed so ConfigModule's
-    # startup validation (src/config/env.validation.ts) doesn't reject them.
+    # Tests never hit a real database, Supabase project, or Google OAuth
+    # (PrismaService, JwtService, and the Google strategy are always
+    # mocked/overridden in unit and e2e specs) — these only need to be
+    # present and well-formed so ConfigModule's startup validation
+    # (src/config/env.validation.ts) doesn't reject them.
     env:
       DATABASE_URL: postgresql://user:pass@localhost:5432/neuron_ci
-      SUPABASE_URL: https://ci-placeholder.supabase.co
+      GOOGLE_CLIENT_ID: ci-placeholder-client-id
+      GOOGLE_CLIENT_SECRET: ci-placeholder-client-secret
+      GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
+      JWT_SECRET: ci-placeholder-jwt-secret
+      FRONTEND_URL: http://localhost:3001
     steps:
       - uses: actions/checkout@v4
 

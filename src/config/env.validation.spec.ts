@@ -3,7 +3,11 @@ import { validate } from './env.validation';
 describe('validate (environment variables)', () => {
   const validEnv = {
     DATABASE_URL: 'postgresql://user:pass@localhost:5432/db',
-    SUPABASE_URL: 'https://project.supabase.co',
+    GOOGLE_CLIENT_ID: 'test-client-id',
+    GOOGLE_CLIENT_SECRET: 'test-client-secret',
+    GOOGLE_CALLBACK_URL: 'http://localhost:3000/auth/google/callback',
+    JWT_SECRET: 'test-jwt-secret',
+    FRONTEND_URL: 'http://localhost:3001',
     PORT: '3000',
   };
 
@@ -11,34 +15,68 @@ describe('validate (environment variables)', () => {
     const result = validate(validEnv);
 
     expect(result.DATABASE_URL).toBe(validEnv.DATABASE_URL);
-    expect(result.SUPABASE_URL).toBe(validEnv.SUPABASE_URL);
+    expect(result.GOOGLE_CLIENT_ID).toBe(validEnv.GOOGLE_CLIENT_ID);
+    expect(result.GOOGLE_CLIENT_SECRET).toBe(validEnv.GOOGLE_CLIENT_SECRET);
+    expect(result.GOOGLE_CALLBACK_URL).toBe(validEnv.GOOGLE_CALLBACK_URL);
+    expect(result.JWT_SECRET).toBe(validEnv.JWT_SECRET);
+    expect(result.FRONTEND_URL).toBe(validEnv.FRONTEND_URL);
     expect(result.PORT).toBe(3000);
   });
 
-  it('allows PORT to be omitted', () => {
-    const result = validate({
-      DATABASE_URL: validEnv.DATABASE_URL,
-      SUPABASE_URL: validEnv.SUPABASE_URL,
-    });
+  it('allows PORT and JWT_EXPIRES_IN to be omitted', () => {
+    const { PORT: _omitPort, ...rest } = validEnv;
+    const result = validate(rest);
 
     expect(result.PORT).toBeUndefined();
+    expect(result.JWT_EXPIRES_IN).toBeUndefined();
+  });
+
+  it('accepts an explicit JWT_EXPIRES_IN', () => {
+    const result = validate({ ...validEnv, JWT_EXPIRES_IN: '30d' });
+
+    expect(result.JWT_EXPIRES_IN).toBe('30d');
   });
 
   it('throws when DATABASE_URL is missing', () => {
-    expect(() =>
-      validate({ SUPABASE_URL: validEnv.SUPABASE_URL, PORT: validEnv.PORT }),
-    ).toThrow(/DATABASE_URL/);
+    const { DATABASE_URL: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/DATABASE_URL/);
   });
 
-  it('throws when SUPABASE_URL is missing', () => {
-    expect(() =>
-      validate({ DATABASE_URL: validEnv.DATABASE_URL, PORT: validEnv.PORT }),
-    ).toThrow(/SUPABASE_URL/);
+  it('throws when GOOGLE_CLIENT_ID is missing', () => {
+    const { GOOGLE_CLIENT_ID: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/GOOGLE_CLIENT_ID/);
   });
 
-  it('throws when SUPABASE_URL is not a valid URL', () => {
-    expect(() => validate({ ...validEnv, SUPABASE_URL: 'not-a-url' })).toThrow(
-      /SUPABASE_URL/,
+  it('throws when GOOGLE_CLIENT_SECRET is missing', () => {
+    const { GOOGLE_CLIENT_SECRET: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/GOOGLE_CLIENT_SECRET/);
+  });
+
+  it('throws when GOOGLE_CALLBACK_URL is not a valid URL', () => {
+    expect(() =>
+      validate({ ...validEnv, GOOGLE_CALLBACK_URL: 'not-a-url' }),
+    ).toThrow(/GOOGLE_CALLBACK_URL/);
+  });
+
+  it('accepts a localhost GOOGLE_CALLBACK_URL (no TLD)', () => {
+    const result = validate({
+      ...validEnv,
+      GOOGLE_CALLBACK_URL: 'http://localhost:3000/auth/google/callback',
+    });
+
+    expect(result.GOOGLE_CALLBACK_URL).toBe(
+      'http://localhost:3000/auth/google/callback',
+    );
+  });
+
+  it('throws when JWT_SECRET is missing', () => {
+    const { JWT_SECRET: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/JWT_SECRET/);
+  });
+
+  it('throws when FRONTEND_URL is not a valid URL', () => {
+    expect(() => validate({ ...validEnv, FRONTEND_URL: 'not-a-url' })).toThrow(
+      /FRONTEND_URL/,
     );
   });
 

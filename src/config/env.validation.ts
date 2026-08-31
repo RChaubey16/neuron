@@ -13,8 +13,24 @@ class EnvironmentVariables {
   @IsString()
   DATABASE_URL: string;
 
-  @IsUrl({ protocols: ['https'] })
-  SUPABASE_URL: string;
+  @IsString()
+  GOOGLE_CLIENT_ID: string;
+
+  @IsString()
+  GOOGLE_CLIENT_SECRET: string;
+
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false, require_protocol: true })
+  GOOGLE_CALLBACK_URL: string;
+
+  @IsString()
+  JWT_SECRET: string;
+
+  @IsOptional()
+  @IsString()
+  JWT_EXPIRES_IN?: string;
+
+  @IsUrl({ protocols: ['http', 'https'], require_tld: false, require_protocol: true })
+  FRONTEND_URL: string;
 
   @IsOptional()
   @IsInt()
@@ -25,9 +41,7 @@ class EnvironmentVariables {
 /**
  * Validates `process.env` at startup so a missing/malformed required
  * variable fails fast with a clear message, instead of surfacing later as a
- * cryptic runtime error deep in whichever service first reads it (e.g.
- * `AuthService` previously crashed with `TypeError: Invalid URL` if
- * `SUPABASE_URL` was unset).
+ * cryptic runtime error deep in whichever service first reads it.
  *
  * @param config - Raw environment variables, as passed by `ConfigModule`
  * @returns The validated, type-coerced configuration
