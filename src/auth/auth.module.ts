@@ -10,9 +10,13 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 const jwtModule = JwtModule.registerAsync({
   inject: [ConfigService],
   useFactory: (configService: ConfigService) => ({
-    secret: configService.get<string>('JWT_SECRET'),
+    secret: configService.getOrThrow<string>('JWT_SECRET'),
     signOptions: {
-      expiresIn: configService.get<string>('JWT_EXPIRES_IN') ?? '7d',
+      // `expiresIn` is only known to be a `string` at this point (an env var
+      // read at runtime), but @types/jsonwebtoken's `StringValue` is a
+      // template-literal type ("7d", "1h", ...) that can't be proven
+      // statically from an arbitrary string.
+      expiresIn: (configService.get<string>('JWT_EXPIRES_IN') ?? '7d') as never,
     },
   }),
 });

@@ -13,7 +13,7 @@ describe('GoogleStrategy', () => {
         {
           provide: ConfigService,
           useValue: {
-            get: (key: string) =>
+            getOrThrow: (key: string) =>
               ({
                 GOOGLE_CLIENT_ID: 'client-id',
                 GOOGLE_CLIENT_SECRET: 'client-secret',

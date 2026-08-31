@@ -1,7 +1,8 @@
 import { Controller, Get, Req, Res, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { ConfigService } from '@nestjs/config';
-import { Request, Response } from 'express';
+import { Request } from 'express';
+import type { Response } from 'express';
 import { AuthService, GoogleProfile } from './auth.service';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { CurrentUser } from './decorators/current-user.decorator';
