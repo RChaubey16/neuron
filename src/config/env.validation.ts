@@ -19,7 +19,11 @@ class EnvironmentVariables {
   @IsString()
   GOOGLE_CLIENT_SECRET: string;
 
-  @IsUrl({ protocols: ['http', 'https'], require_tld: false, require_protocol: true })
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_tld: false,
+    require_protocol: true,
+  })
   GOOGLE_CALLBACK_URL: string;
 
   @IsString()
@@ -29,7 +33,11 @@ class EnvironmentVariables {
   @IsString()
   JWT_EXPIRES_IN?: string;
 
-  @IsUrl({ protocols: ['http', 'https'], require_tld: false, require_protocol: true })
+  @IsUrl({
+    protocols: ['http', 'https'],
+    require_tld: false,
+    require_protocol: true,
+  })
   FRONTEND_URL: string;
 
   @IsOptional()
