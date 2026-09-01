@@ -13,6 +13,22 @@ services:
       timeout: 3s
       retries: 5
 
+  frontend:
+    image: node:22-alpine
+    working_dir: /app
+    command: sh -c "corepack enable && pnpm install --frozen-lockfile --store-dir /pnpm-store && pnpm exec next dev -H 0.0.0.0 -p 3001"
+    volumes:
+      - ./frontend:/app
+      - frontend-node-modules:/app/node_modules
+      - frontend-pnpm-store:/pnpm-store
+    ports:
+      - '3001:3001'
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3000
+      CI: 'true'
+    depends_on:
+      - app
+
   redis:
     image: redis:7-alpine
     ports:
@@ -22,3 +38,5 @@ services:
 
 volumes:
   redis-data:
+  frontend-node-modules:
+  frontend-pnpm-store:

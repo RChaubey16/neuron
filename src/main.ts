@@ -10,6 +10,12 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
+
+  const configService = app.get(ConfigService);
+  app.enableCors({
+    origin: configService.getOrThrow<string>('FRONTEND_URL'),
+  });
+
   app.useGlobalPipes(
     new ValidationPipe({
       whitelist: true,
@@ -19,7 +25,6 @@ async function bootstrap() {
   );
   app.useGlobalInterceptors(new ClassSerializerInterceptor(app.get(Reflector)));
 
-  const configService = app.get(ConfigService);
   await app.listen(configService.get<number>('PORT') ?? 3000);
 }
 bootstrap().catch((error: unknown) => {
