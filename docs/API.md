@@ -22,25 +22,32 @@ credentials, checked by different guards, for different kinds of caller.
 | | Dashboard routes | Service routes |
 |---|---|---|
 | Who calls them | A logged-in human, via a dashboard/UI | Another app/service, machine-to-machine |
-| Credential | Supabase-issued JWT | API key |
+| Credential | Nest-issued session JWT (self-hosted Google OAuth) | API key |
 | Header | `Authorization: Bearer <token>` | `x-api-key: <raw-key>` |
-| Guard | `SupabaseJwtGuard` | `ApiKeyGuard` |
+| Guard | `JwtAuthGuard` | `ApiKeyGuard` |
 | Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /shorten` |
 
-### Getting a Supabase JWT (for dashboard routes, in Postman)
+### Getting a session JWT (for dashboard routes, in Postman)
 
-There's no dashboard frontend yet. To get a real token for Postman:
+There's no dashboard frontend yet. This app drives the Google OAuth redirect
+itself, so to get a real token for Postman:
 
-1. Open `scripts/manual-google-login.html` in a browser (a throwaway static
-   page, already pointed at this project's Supabase URL/anon key).
-2. Complete the Google OAuth login. The page prints the resulting
-   `access_token`.
-3. In Postman, set the `Authorization` header on the request (or a
+1. Open `GET /auth/google` (i.e. `http://localhost:3000/auth/google`) directly
+   in a browser. It redirects to Google's consent screen.
+2. Complete the Google login. Google redirects back to this app's
+   `GET /auth/google/callback`, which looks up/creates the local `User` row
+   and issues a session JWT.
+3. That callback redirects the browser to
+   `${FRONTEND_URL}/auth/callback#token=<jwt>` — copy the `token` value out
+   of the URL fragment (there's no frontend listening there yet, so the
+   browser will just show a "can't be reached"-style page; the token is
+   still in the address bar).
+4. In Postman, set the `Authorization` header on the request (or a
    collection/environment variable, see [Postman setup](#postman-setup)
-   below) to `Bearer <access_token>`.
+   below) to `Bearer <token>`.
 
-Tokens are short-lived — if you start getting `401 Unauthorized` after a
-while, re-run the login flow for a fresh token.
+Tokens expire per `JWT_EXPIRES_IN` (`.env`) — if you start getting `401
+Unauthorized` after a while, repeat the flow for a fresh token.
 
 ### Getting an API key (for service routes, in Postman)
 
@@ -54,6 +61,10 @@ API keys are created through the dashboard routes, so you need a JWT first:
 Alternatively, for local development against a Supabase DB you own,
 `pnpm exec prisma db seed` creates a test user and prints a ready-to-use raw
 API key without needing to go through Google OAuth at all.
+
+Note the seeded user has no real Google login — there's no session JWT for
+it. Seeding only gets you the API key for service routes; dashboard routes
+still need a real `GET /auth/google` login.
 
 ## Rate limiting
 
@@ -107,16 +118,18 @@ Liveness check. No auth required, no rate limit.
 Returns the logged-in user's profile, lazily creating the local `User` row
 on that user's very first authenticated request.
 
-**Auth:** `Authorization: Bearer <supabase-jwt>`
+**Auth:** `Authorization: Bearer <jwt>`
 
 **Response — `200 OK`**
 ```json
 {
-  "id": "3f2e6b1a-...-uuid",
+  "id": "104852374619283746192",
   "email": "user@example.com",
   "createdAt": "2026-08-29T10:00:00.000Z"
 }
 ```
+(`id` is Google's `sub` claim, not a Prisma-generated UUID — it's whatever
+numeric string Google assigns that account.)
 
 **Errors**
 | Status | When |
@@ -131,7 +144,7 @@ Generates a new API key for the logged-in user. **The raw key is returned
 only in this response — copy it now.** Only its SHA-256 hash and a display
 prefix are ever persisted.
 
-**Auth:** `Authorization: Bearer <supabase-jwt>`
+**Auth:** `Authorization: Bearer <jwt>`
 
 **Request body**
 | Field | Type | Required | Notes |
@@ -169,7 +182,7 @@ prefix are ever persisted.
 Lists the logged-in user's API keys, most recently created first. Never
 includes the raw key or its hash — only `keyPrefix` for display.
 
-**Auth:** `Authorization: Bearer <supabase-jwt>`
+**Auth:** `Authorization: Bearer <jwt>`
 
 **Response — `200 OK`**
 ```json
@@ -197,7 +210,7 @@ includes the raw key or its hash — only `keyPrefix` for display.
 Revokes (soft-deletes) one of the caller's own API keys. A revoked key can
 no longer authenticate service requests.
 
-**Auth:** `Authorization: Bearer <supabase-jwt>`
+**Auth:** `Authorization: Bearer <jwt>`
 
 **Path params**
 | Param | Type | Notes |
@@ -219,7 +232,7 @@ no longer authenticate service requests.
 Aggregate call counts for the logged-in user's own API keys, grouped by
 service, day, and key.
 
-**Auth:** `Authorization: Bearer <supabase-jwt>`
+**Auth:** `Authorization: Bearer <jwt>`
 
 **Response — `200 OK`**
 ```json
@@ -326,7 +339,7 @@ Recommended environment variables for a Postman collection:
 | Variable | Example value | Set from |
 |---|---|---|
 | `baseUrl` | `http://localhost:3000` | Fixed |
-| `jwt` | `eyJhbGciOi...` | `scripts/manual-google-login.html`'s output |
+| `jwt` | `eyJhbGciOi...` | `token` fragment from `GET /auth/google`'s callback redirect |
 | `apiKey` | `nrn_ab12cd34...` | `POST /api-keys`'s `key` field, or the seed script |
 | `shortCode` | `UgFiSdm` | `POST /shorten`'s `code` field |
 
@@ -337,7 +350,8 @@ Then:
 
 **Suggested end-to-end flow to exercise the whole API in one pass:**
 1. `GET /health` — sanity check the server is up.
-2. Get a JWT via `scripts/manual-google-login.html`, set `{{jwt}}`.
+2. Get a JWT via `GET /auth/google` (complete the Google login, copy the
+   `token` fragment from the callback redirect), set `{{jwt}}`.
 3. `GET /me` — confirms the JWT works and lazily creates your `User` row.
 4. `POST /api-keys` — copy the `key` field into `{{apiKey}}`.
 5. `GET /api-keys` — confirm it's listed (without the raw key).

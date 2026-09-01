@@ -44,21 +44,41 @@ don't backfill from memory once details fade.
 
 ---
 
-## Phase 2 — Dashboard Auth (Google OAuth via Supabase) 🚧
+## Phase 2 — Dashboard Auth (Google OAuth + JWT) ✅
 
-_Tweets go here once Google login via Supabase Auth works end-to-end and `GET /me` returns the logged-in user._
+1. Started Phase 2 on Supabase Auth for Google login — got it working, `GET /me` returned the right user. Then decided to rip it out and self-host the OAuth flow instead. Sometimes the "done" version isn't the version you keep. 🔁
+
+2. Neuron now drives Google OAuth itself: `GET /auth/google` redirects to Google via `passport-google-oauth20`, `GET /auth/google/callback` looks up/creates the `User` row and hands back a Nest-issued JWT (`@nestjs/jwt`, not Supabase's). Supabase is database-only now — just Postgres via Prisma.
+
+3. Migrating away from a library meant losing its guardrails. `jose`/`@nestjs/config`/`@nestjs/jwt`/`@nestjs/passport` all have ESM-only "latest" majors that silently break CommonJS Jest on import — pinned every one back to a CJS-compatible line. Same lesson, four times over.
+
+4. Manual end-to-end verification against a real Google OAuth client caught a real bug: `findOrCreateUser`'s upsert matched on `id`, so a user from before this migration (whose `id` was a Supabase UUID, not Google's `sub`) missed the lookup and crashed on a duplicate-email constraint instead of linking accounts. Fixed by upserting on `email` — the column that's actually unique.
+
+5. Post-commit review turned up one more: an unverified Google profile email could be used to hijack an existing account. Added an explicit `email_verified` check before trusting the profile. Caught before it shipped, but a good reminder that "OAuth worked in testing" isn't the same as "OAuth is safe."
+
+6. Phase 2 done (the long way): self-hosted Google OAuth, Nest-issued session JWTs, `GET /me` verified end-to-end against a real login and a real Postgres DB. On to API keys. 🔑
 
 ---
 
-## Phase 3 — API Key Management 🚧
+## Phase 3 — API Key Management ✅
 
-_Tweets go here once keys can be created, listed, revoked, and used to authenticate a separate request._
+1. `POST /api-keys` generates a `crypto.randomBytes(32)` key, stores only its SHA-256 hash (no salt needed — the key's already high-entropy), and returns the raw value exactly once. `GET /api-keys` / `DELETE /api-keys/:id` round out list + revoke.
+
+2. Built `ApiKeyGuard` — the machine-auth counterpart to the dashboard's `JwtAuthGuard`. Hashes the incoming `x-api-key` header, looks up the match, rejects if missing or revoked. Two different credentials, two different guards, on purpose.
+
+3. Verified end-to-end against the real Supabase Postgres DB: created a key with a real bearer token, authenticated a separate request using only the raw key, revoked it, confirmed the revoked key then gets rejected. Phase 3 done — machines can now authenticate independently of humans. 🤖
 
 ---
 
-## Phase 4 — Usage Logging 🚧
+## Phase 4 — Usage Logging ✅
 
-_Tweets go here once every authenticated call produces a `UsageLog` row automatically and `/usage` reflects it._
+1. Every authenticated service call now writes a `UsageLog` row automatically via `UsageLoggingInterceptor` — `apiKeyId`, `service`, `endpoint` — without any individual service module having to remember to log anything itself. Cross-cutting by design.
+
+2. Learned (again) that a Prisma query builder call is a lazy "PrismaPromise" — it only executes once something subscribes via `.then()`/`.catch()`. `void`-ing a fire-and-forget write looks fine and silently never runs the query. `.catch(() => {})` is the fix, and now it's a standing regression test on every fire-and-forget write in the codebase.
+
+3. `GET /usage` aggregates by service/day/key using raw `$queryRaw` SQL, since Prisma's `groupBy` can't date-truncate `createdAt`. Verified the raw SQL against real Postgres with a standalone script, since the unit tests mock `$queryRaw` entirely and wouldn't have caught a syntax mistake.
+
+4. Phase 4 done: every authenticated call is now automatically logged, and `/usage` reflects it. Not wired into a real production route yet — no service module existed to log from until Phase 6. 📊
 
 ---
 
@@ -68,9 +88,19 @@ _Tweets go here once a test app can POST to `/notifications/email` with an API k
 
 ---
 
-## Phase 6 — URL Shortener Service 🚧
+## Phase 6 — URL Shortener Service ✅
 
-_Tweets go here once a shortened URL redirects correctly and increments its click count._
+1. Built Phase 6 ahead of Phase 5 — both only depend on Phase 4, not each other, and the shortener was the faster path to proving the service pattern end-to-end.
+
+2. `POST /shorten` (protected by `ApiKeyGuard` + `@Service('url-shortener')`) is the first real consumer of Phase 4's usage-logging pattern. `ShortUrlService.create` generates a 7-char `nanoid()` code and retries on the rare unique-constraint collision.
+
+3. `GET /:code` is the one deliberately unauthenticated route in the whole API — meant to be clicked directly by browsers, not called with a key. Had to keep it registered dead last in `AppModule`/routing, since a single-segment catch-all like `/:code` would otherwise shadow routes like `/health` or `/usage` by registration order, not specificity.
+
+4. Added global rate limiting via `@nestjs/throttler` — a default cap per IP, with a tighter override on `POST /shorten` and a looser one on `GET /:code` (real users click these links). Per-API-key limits are explicitly a Phase 7 problem.
+
+5. Verified end-to-end against the real Supabase Postgres DB: shortened a URL, confirmed the redirect and `Location` header, confirmed `clickCount` incremented and a `UsageLog` row landed, confirmed a bad scheme (`javascript:`) gets rejected. Phase 6 done — second service, same pattern, proving it's reusable. 🔗
+
+6. Ran a NestJS best-practices audit pass ahead of Phase 7 rather than duplicating it later: added startup env validation (which also fixed a real crash-on-missing-`SUPABASE_URL` bug), turned on `ValidationPipe({ transform: true })`, made `ShortUrlModule` explicitly import `ApiKeyModule` instead of relying on Nest's implicit guard resolution, and exempted `/health` from throttling so uptime monitors don't get rate-limited. Small things, all found by reading the code with fresh eyes instead of just moving to the next phase.
 
 ---
 
