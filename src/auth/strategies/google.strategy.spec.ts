@@ -51,4 +51,16 @@ describe('GoogleStrategy', () => {
 
     expect(done).toHaveBeenCalledWith(expect.any(Error), false);
   });
+
+  it('fails when the Google profile email is not verified', () => {
+    const done = jest.fn();
+    const profile = {
+      id: 'google-sub-1',
+      emails: [{ value: 'user@example.com', verified: false }],
+    } as unknown as Profile;
+
+    strategy.validate('access-token', 'refresh-token', profile, done);
+
+    expect(done).toHaveBeenCalledWith(expect.any(Error), false);
+  });
 });

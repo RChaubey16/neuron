@@ -22,12 +22,23 @@ export class GoogleStrategy extends PassportStrategy(Strategy, 'google') {
     profile: Profile,
     done: VerifyCallback,
   ): void {
-    const email = profile.emails?.[0]?.value;
-    if (!email) {
+    const emailEntry = profile.emails?.[0];
+    if (!emailEntry) {
       done(new Error('Google profile has no email'), false);
       return;
     }
-    const googleProfile: GoogleProfile = { sub: profile.id, email };
+    // AuthService.findOrCreateUser links a login to an existing User row by
+    // email, so an unverified email here would let an attacker take over
+    // any existing account by claiming its email on a Google account they
+    // control without proving ownership of it.
+    if (!emailEntry.verified) {
+      done(new Error('Google profile email is not verified'), false);
+      return;
+    }
+    const googleProfile: GoogleProfile = {
+      sub: profile.id,
+      email: emailEntry.value,
+    };
     done(null, googleProfile);
   }
 }
