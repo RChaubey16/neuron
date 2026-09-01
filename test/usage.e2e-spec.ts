@@ -6,7 +6,7 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
-import { jwtVerify } from 'jose';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -14,11 +14,6 @@ import { PrismaService } from './../src/prisma/prisma.service';
 import { ApiKeyGuard } from './../src/api-keys/guards/api-key.guard';
 import { UsageLoggingInterceptor } from './../src/usage/interceptors/usage-logging.interceptor';
 import { Service } from './../src/usage/decorators/service.decorator';
-
-jest.mock('jose', () => ({
-  createRemoteJWKSet: jest.fn(() => 'mock-jwks'),
-  jwtVerify: jest.fn(),
-}));
 
 // Proves UsageLoggingInterceptor works end-to-end without adding an unused
 // production route — real service routes start consuming it from Phase 5
@@ -36,10 +31,10 @@ class TestServiceController {
 
 describe('Usage (e2e)', () => {
   let app: INestApplication<App>;
-  const mockJwtVerify = jwtVerify as jest.Mock;
+  const jwtServiceMock = { verifyAsync: jest.fn() };
   const user = { id: 'user-1', email: 'user@example.com' };
   const prismaMock = {
-    user: { upsert: jest.fn() },
+    user: { findUniqueOrThrow: jest.fn() },
     apiKey: {
       findFirst: jest.fn(),
       update: jest.fn(),
@@ -49,10 +44,11 @@ describe('Usage (e2e)', () => {
   };
 
   beforeEach(async () => {
-    mockJwtVerify.mockResolvedValue({
-      payload: { sub: user.id, email: user.email },
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: user.id,
+      email: user.email,
     });
-    prismaMock.user.upsert.mockResolvedValue(user);
+    prismaMock.user.findUniqueOrThrow.mockResolvedValue(user);
     prismaMock.apiKey.update.mockResolvedValue({});
     prismaMock.usageLog.create.mockResolvedValue({});
 
@@ -62,6 +58,8 @@ describe('Usage (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(JwtService)
+      .useValue(jwtServiceMock)
       .compile();
 
     app = moduleFixture.createNestApplication();

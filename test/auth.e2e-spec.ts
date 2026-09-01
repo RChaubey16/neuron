@@ -1,20 +1,17 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication } from '@nestjs/common';
-import { jwtVerify } from 'jose';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
 
-jest.mock('jose', () => ({
-  createRemoteJWKSet: jest.fn(() => 'mock-jwks'),
-  jwtVerify: jest.fn(),
-}));
-
 describe('AuthController (e2e)', () => {
   let app: INestApplication<App>;
-  const mockJwtVerify = jwtVerify as jest.Mock;
-  const prismaMock = { user: { upsert: jest.fn() } };
+  const jwtServiceMock = { verifyAsync: jest.fn(), signAsync: jest.fn() };
+  const prismaMock = {
+    user: { upsert: jest.fn(), findUniqueOrThrow: jest.fn() },
+  };
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -22,6 +19,8 @@ describe('AuthController (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(JwtService)
+      .useValue(jwtServiceMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -33,11 +32,12 @@ describe('AuthController (e2e)', () => {
     jest.clearAllMocks();
   });
 
-  it('/me (GET) returns the synced user for a valid Supabase token', async () => {
-    mockJwtVerify.mockResolvedValue({
-      payload: { sub: 'user-1', email: 'user@example.com' },
+  it('/me (GET) returns the logged-in user for a valid session token', async () => {
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: 'user-1',
+      email: 'user@example.com',
     });
-    prismaMock.user.upsert.mockResolvedValue({
+    prismaMock.user.findUniqueOrThrow.mockResolvedValue({
       id: 'user-1',
       email: 'user@example.com',
     });
@@ -48,10 +48,8 @@ describe('AuthController (e2e)', () => {
       .expect(200)
       .expect({ id: 'user-1', email: 'user@example.com' });
 
-    expect(prismaMock.user.upsert).toHaveBeenCalledWith({
+    expect(prismaMock.user.findUniqueOrThrow).toHaveBeenCalledWith({
       where: { id: 'user-1' },
-      update: {},
-      create: { id: 'user-1', email: 'user@example.com' },
     });
   });
 
@@ -60,7 +58,7 @@ describe('AuthController (e2e)', () => {
   });
 
   it('/me (GET) rejects an invalid token', () => {
-    mockJwtVerify.mockRejectedValue(new Error('signature verification failed'));
+    jwtServiceMock.verifyAsync.mockRejectedValue(new Error('jwt malformed'));
 
     return request(app.getHttpServer())
       .get('/me')

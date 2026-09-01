@@ -821,7 +821,7 @@ import { JwtAuthGuard } from './guards/jwt-auth.guard';
 export class AuthModule {}
 ```
 
-This task has no isolated test of its own — it only rewires DI. Its correctness is exercised by Task 7's e2e test, which needs the full module graph to compile. Do not run `pnpm run test` yet; `auth.controller.ts` (Task 7) still references the deleted `verifyAndSyncUser`/`SupabaseJwtGuard` at this point and won't compile until Task 7 lands.
+This task has no isolated test of its own — it only rewires DI. Its correctness is exercised by Task 7's e2e tests, which need the full module graph to compile. Do not run `pnpm run test` yet; `auth.controller.ts`, `api-keys.controller.ts`, and `usage.controller.ts` (all fixed together in Task 7) still reference the deleted `verifyAndSyncUser`/`SupabaseJwtGuard` at this point and won't compile until Task 7 lands.
 
 - [ ] **Step 2: Commit**
 
@@ -832,16 +832,22 @@ git commit -m "feat(auth): wire PassportModule + JwtModule into AuthModule"
 
 ---
 
-### Task 7: `AuthController` — Google login routes + `/me`
+### Task 7: `AuthController` (Google login routes + `/me`) and guard swap on `ApiKeyController`/`UsageController`
+
+**Why this task covers three controllers, not one:** Task 4 deletes `src/auth/guards/supabase-jwt.guard.ts`, and Task 3 already removed the `AuthService.verifyAndSyncUser` method it called. At that point `auth.controller.ts`, `api-keys.controller.ts`, and `usage.controller.ts` all still reference the deleted guard, so `AppModule` cannot compile — and no e2e test that imports it can pass — until all three are switched to `JwtAuthGuard` together. Splitting this into two tasks (auth controller in one, api-keys/usage in another) would leave the first task's own e2e verification step asserting a pass it cannot actually get, since `AppModule` would still be broken by the other two.
 
 **Files:**
 - Modify: `src/auth/auth.controller.ts`
 - Create: `src/auth/auth.controller.spec.ts`
 - Modify: `test/auth.e2e-spec.ts`
+- Modify: `src/api-keys/api-keys.controller.ts`
+- Modify: `src/usage/usage.controller.ts`
+- Modify: `test/api-keys.e2e-spec.ts`
+- Modify: `test/usage.e2e-spec.ts`
 
 **Interfaces:**
-- Consumes: `AuthService.findOrCreateUser`, `AuthService.signToken`, `GoogleProfile` (Task 3), `JwtAuthGuard` (Task 4), `ConfigService.get<string>('FRONTEND_URL')`.
-- Produces: `GET /auth/google`, `GET /auth/google/callback`, `GET /me` (now guarded by `JwtAuthGuard`).
+- Consumes: `AuthService.findOrCreateUser`, `AuthService.signToken`, `GoogleProfile` (Task 3), `JwtAuthGuard` (Task 4), exported by `AuthModule` (Task 6) — `ApiKeyModule`/`UsageModule` already `imports: [AuthModule]`, no module-file changes needed there. `ConfigService.get<string>('FRONTEND_URL')`.
+- Produces: `GET /auth/google`, `GET /auth/google/callback`, `GET /me`, `GET/POST /api-keys`, `DELETE /api-keys/:id`, `GET /usage` — all now guarded by `JwtAuthGuard`.
 
 - [ ] **Step 1: Write the failing unit test for the callback handler**
 
@@ -1033,37 +1039,11 @@ describe('AuthController (e2e)', () => {
 });
 ```
 
-Note: this intentionally does not e2e-test `GET /auth/google` or `GET /auth/google/callback` — those require a real Google OAuth handshake (network calls to Google), which is exactly what Task 11's manual verification covers. `auth.controller.spec.ts` (Step 1-4 above) already unit-tests the callback handler's own logic in isolation from passport.
+Note: this intentionally does not e2e-test `GET /auth/google` or `GET /auth/google/callback` — those require a real Google OAuth handshake (network calls to Google), which is exactly what Task 10's manual verification covers. `auth.controller.spec.ts` (Step 1-4 above) already unit-tests the callback handler's own logic in isolation from passport.
 
-- [ ] **Step 6: Run the full unit + e2e suite for this task**
+Note: do not run `pnpm run test:e2e -- auth.e2e-spec.ts` yet — `AppModule` still won't compile until Steps 6-8 below also fix `api-keys.controller.ts` and `usage.controller.ts`. The full verification for this task is Step 9.
 
-Run: `pnpm run test -- auth.controller.spec.ts auth.service.spec.ts jwt-auth.guard.spec.ts google.strategy.spec.ts env.validation.spec.ts`
-Expected: PASS
-
-Run: `pnpm run test:e2e -- auth.e2e-spec.ts`
-Expected: PASS
-
-- [ ] **Step 7: Commit**
-
-```bash
-git add src/auth/auth.controller.ts src/auth/auth.controller.spec.ts test/auth.e2e-spec.ts
-git commit -m "feat(auth): add Google login/callback routes, guard /me with JwtAuthGuard"
-```
-
----
-
-### Task 8: Switch `ApiKeyController` and `UsageController` to `JwtAuthGuard`
-
-**Files:**
-- Modify: `src/api-keys/api-keys.controller.ts`
-- Modify: `src/usage/usage.controller.ts`
-- Modify: `test/api-keys.e2e-spec.ts`
-- Modify: `test/usage.e2e-spec.ts`
-
-**Interfaces:**
-- Consumes: `JwtAuthGuard` (Task 4), exported by `AuthModule` (Task 6) — both modules already `imports: [AuthModule]`, no module-file changes needed.
-
-- [ ] **Step 1: Swap the guard import in both controllers**
+- [ ] **Step 6: Swap the guard import in both controllers**
 
 In `src/api-keys/api-keys.controller.ts`, change:
 
@@ -1087,7 +1067,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 ```
 and change `@UseGuards(SupabaseJwtGuard)` to `@UseGuards(JwtAuthGuard)`.
 
-- [ ] **Step 2: Update `test/api-keys.e2e-spec.ts`**
+- [ ] **Step 7: Update `test/api-keys.e2e-spec.ts`**
 
 Remove these two lines near the top of the file:
 
@@ -1181,7 +1161,7 @@ with
       .compile();
 ```
 
-- [ ] **Step 3: Update `test/usage.e2e-spec.ts`**
+- [ ] **Step 8: Update `test/usage.e2e-spec.ts`**
 
 Remove these two lines near the top of the file:
 
@@ -1279,21 +1259,24 @@ with
       .compile();
 ```
 
-- [ ] **Step 4: Run tests**
+- [ ] **Step 9: Run the full unit + e2e suite for this task**
 
-Run: `pnpm run test:e2e -- api-keys.e2e-spec.ts usage.e2e-spec.ts`
+Run: `pnpm run test -- auth.controller.spec.ts auth.service.spec.ts jwt-auth.guard.spec.ts google.strategy.spec.ts env.validation.spec.ts`
 Expected: PASS
 
-- [ ] **Step 5: Commit**
+Run: `pnpm run test:e2e -- auth.e2e-spec.ts api-keys.e2e-spec.ts usage.e2e-spec.ts`
+Expected: PASS — this is the first point at which `AppModule` compiles again: every controller that used to reference `SupabaseJwtGuard` now references `JwtAuthGuard`, and the deleted guard file (Task 4) has no remaining consumers.
+
+- [ ] **Step 10: Commit**
 
 ```bash
-git add src/api-keys/api-keys.controller.ts src/usage/usage.controller.ts test/api-keys.e2e-spec.ts test/usage.e2e-spec.ts
-git commit -m "feat(auth): switch api-keys and usage routes to JwtAuthGuard"
+git add src/auth/auth.controller.ts src/auth/auth.controller.spec.ts test/auth.e2e-spec.ts src/api-keys/api-keys.controller.ts src/usage/usage.controller.ts test/api-keys.e2e-spec.ts test/usage.e2e-spec.ts
+git commit -m "feat(auth): add Google login/callback routes, switch all dashboard routes to JwtAuthGuard"
 ```
 
 ---
 
-### Task 9: Full suite check, Prisma doc comment, cleanup
+### Task 8: Full suite check, Prisma doc comment, cleanup
 
 **Files:**
 - Modify: `prisma/schema.prisma`
@@ -1325,7 +1308,7 @@ No migration is needed — the column type/constraints are unchanged.
 rm scripts/manual-google-login.html
 ```
 
-This page drove Supabase's client-side Google login, which no longer exists. Task 11's manual verification hits `GET /auth/google` directly in a browser instead — Nest itself now drives the redirect, so no standalone HTML page is needed to kick off the flow.
+This page drove Supabase's client-side Google login, which no longer exists. Task 10's manual verification hits `GET /auth/google` directly in a browser instead — Nest itself now drives the redirect, so no standalone HTML page is needed to kick off the flow.
 
 - [ ] **Step 3: Run the full test suite**
 
@@ -1356,7 +1339,7 @@ git commit -m "chore: update User doc comment, remove obsolete Supabase login sc
 
 ---
 
-### Task 10: Update `CLAUDE.md`
+### Task 9: Update `CLAUDE.md`
 
 **Files:**
 - Modify: `CLAUDE.md`
@@ -1380,7 +1363,7 @@ git commit -m "docs: update CLAUDE.md for self-hosted Google OAuth + JWT auth"
 
 ---
 
-### Task 11: Manual end-to-end verification (requires real Google OAuth credentials — human-in-the-loop)
+### Task 10: Manual end-to-end verification (requires real Google OAuth credentials — human-in-the-loop)
 
 **Files:** none — this is a verification task, not a code change.
 
@@ -1390,11 +1373,11 @@ git commit -m "docs: update CLAUDE.md for self-hosted Google OAuth + JWT auth"
 
 If you are an agent executing this plan and do not have these, stop here and hand this task back to the user with the steps below rather than attempting to simulate or fake completion.
 
-- [ ] **Step 1:** Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `JWT_SECRET`, `FRONTEND_URL` in `.env` with real values (Google Cloud Console for the OAuth client; `FRONTEND_URL` can point anywhere reachable, e.g. `http://localhost:3001`, since no dashboard frontend exists yet — the redirect target just needs to be inspectable).
-- [ ] **Step 2:** `docker compose up --build`
-- [ ] **Step 3:** In a browser, visit `http://localhost:3000/auth/google`. Confirm it redirects to Google's consent screen.
-- [ ] **Step 4:** Complete Google login. Confirm the browser lands on `${FRONTEND_URL}/auth/callback#token=<jwt>` with a real JWT in the URL fragment.
-- [ ] **Step 5:** Copy that token and confirm `GET /me` (e.g. via curl or Postman) with `Authorization: Bearer <token>` returns the expected user profile, and that a `User` row was created in the real Supabase Postgres DB (check via `pnpm exec prisma studio` or a direct query).
-- [ ] **Step 6:** Confirm `GET /me` with no token, or a tampered token, returns 401.
-- [ ] **Step 7:** Clean up any test data created in the real DB during this verification, the same way prior phases' manual verification steps did.
-- [ ] **Step 8:** Update `CLAUDE.md`'s "Current state" paragraph (from Task 10) to note this was confirmed end-to-end against real Google OAuth + Supabase Postgres, matching how every prior phase's confirmation was recorded.
+- [x] **Step 1:** Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `JWT_SECRET`, `FRONTEND_URL` in `.env` with real values (Google Cloud Console for the OAuth client; `FRONTEND_URL` can point anywhere reachable, e.g. `http://localhost:3001`, since no dashboard frontend exists yet — the redirect target just needs to be inspectable).
+- [x] **Step 2:** `docker compose up --build`
+- [x] **Step 3:** In a browser, visit `http://localhost:3000/auth/google`. Confirm it redirects to Google's consent screen.
+- [x] **Step 4:** Complete Google login. Confirm the browser lands on `${FRONTEND_URL}/auth/callback#token=<jwt>` with a real JWT in the URL fragment.
+- [x] **Step 5:** Copy that token and confirm `GET /me` (e.g. via curl or Postman) with `Authorization: Bearer <token>` returns the expected user profile, and that a `User` row was created in the real Supabase Postgres DB (check via `pnpm exec prisma studio` or a direct query). Found and fixed a real bug along the way: `AuthService.findOrCreateUser` upserted on `id` (Google's `sub`) instead of `email`, so a pre-existing `User` row from before this migration (same email, old Supabase-issued `id`) missed the lookup and crashed on the `create` branch's `email` unique-constraint collision. Fixed to upsert on `email`; re-verified after the fix.
+- [x] **Step 6:** Confirm `GET /me` with no token, or a tampered token, returns 401.
+- [x] **Step 7:** Clean up any test data created in the real DB during this verification, the same way prior phases' manual verification steps did.
+- [x] **Step 8:** Update `CLAUDE.md`'s "Current state" paragraph (from Task 10) to note this was confirmed end-to-end against real Google OAuth + Supabase Postgres, matching how every prior phase's confirmation was recorded.

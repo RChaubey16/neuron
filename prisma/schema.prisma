@@ -12,8 +12,8 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Synced lazily from Supabase `auth.users` on a user's first authenticated
-/// request — `id` is the same UUID as the `auth.users` row, not Prisma-generated.
+/// Synced lazily from Google's OAuth profile on a user's first login —
+/// `id` is Google's stable `sub` claim, not Prisma-generated.
 model User {
   id        String   @id
   email     String   @unique
