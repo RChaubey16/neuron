@@ -24,8 +24,13 @@ export class AuthService {
    * @returns The local User row matching the Google account
    */
   async findOrCreateUser(profile: GoogleProfile): Promise<User> {
+    // Keyed by email, not Google's `sub`: `email` carries the actual unique
+    // constraint, and a returning user's `id` may already be set to a
+    // different value from before this app switched identity providers.
+    // Upserting on `id` would miss that existing row and crash on the
+    // `create` branch's email collision instead of linking to it.
     return this.prisma.user.upsert({
-      where: { id: profile.sub },
+      where: { email: profile.email },
       update: {},
       create: { id: profile.sub, email: profile.email },
     });

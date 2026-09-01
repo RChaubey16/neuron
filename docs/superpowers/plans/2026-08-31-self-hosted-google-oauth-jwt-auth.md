@@ -1373,11 +1373,11 @@ git commit -m "docs: update CLAUDE.md for self-hosted Google OAuth + JWT auth"
 
 If you are an agent executing this plan and do not have these, stop here and hand this task back to the user with the steps below rather than attempting to simulate or fake completion.
 
-- [ ] **Step 1:** Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `JWT_SECRET`, `FRONTEND_URL` in `.env` with real values (Google Cloud Console for the OAuth client; `FRONTEND_URL` can point anywhere reachable, e.g. `http://localhost:3001`, since no dashboard frontend exists yet — the redirect target just needs to be inspectable).
-- [ ] **Step 2:** `docker compose up --build`
-- [ ] **Step 3:** In a browser, visit `http://localhost:3000/auth/google`. Confirm it redirects to Google's consent screen.
-- [ ] **Step 4:** Complete Google login. Confirm the browser lands on `${FRONTEND_URL}/auth/callback#token=<jwt>` with a real JWT in the URL fragment.
-- [ ] **Step 5:** Copy that token and confirm `GET /me` (e.g. via curl or Postman) with `Authorization: Bearer <token>` returns the expected user profile, and that a `User` row was created in the real Supabase Postgres DB (check via `pnpm exec prisma studio` or a direct query).
-- [ ] **Step 6:** Confirm `GET /me` with no token, or a tampered token, returns 401.
-- [ ] **Step 7:** Clean up any test data created in the real DB during this verification, the same way prior phases' manual verification steps did.
-- [ ] **Step 8:** Update `CLAUDE.md`'s "Current state" paragraph (from Task 10) to note this was confirmed end-to-end against real Google OAuth + Supabase Postgres, matching how every prior phase's confirmation was recorded.
+- [x] **Step 1:** Set `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_CALLBACK_URL`, `JWT_SECRET`, `FRONTEND_URL` in `.env` with real values (Google Cloud Console for the OAuth client; `FRONTEND_URL` can point anywhere reachable, e.g. `http://localhost:3001`, since no dashboard frontend exists yet — the redirect target just needs to be inspectable).
+- [x] **Step 2:** `docker compose up --build`
+- [x] **Step 3:** In a browser, visit `http://localhost:3000/auth/google`. Confirm it redirects to Google's consent screen.
+- [x] **Step 4:** Complete Google login. Confirm the browser lands on `${FRONTEND_URL}/auth/callback#token=<jwt>` with a real JWT in the URL fragment.
+- [x] **Step 5:** Copy that token and confirm `GET /me` (e.g. via curl or Postman) with `Authorization: Bearer <token>` returns the expected user profile, and that a `User` row was created in the real Supabase Postgres DB (check via `pnpm exec prisma studio` or a direct query). Found and fixed a real bug along the way: `AuthService.findOrCreateUser` upserted on `id` (Google's `sub`) instead of `email`, so a pre-existing `User` row from before this migration (same email, old Supabase-issued `id`) missed the lookup and crashed on the `create` branch's `email` unique-constraint collision. Fixed to upsert on `email`; re-verified after the fix.
+- [x] **Step 6:** Confirm `GET /me` with no token, or a tampered token, returns 401.
+- [x] **Step 7:** Clean up any test data created in the real DB during this verification, the same way prior phases' manual verification steps did.
+- [x] **Step 8:** Update `CLAUDE.md`'s "Current state" paragraph (from Task 10) to note this was confirmed end-to-end against real Google OAuth + Supabase Postgres, matching how every prior phase's confirmation was recorded.

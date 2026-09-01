@@ -24,7 +24,7 @@ describe('AuthService', () => {
   });
 
   describe('findOrCreateUser', () => {
-    it('upserts a local User keyed by the Google sub', async () => {
+    it('upserts a local User keyed by email', async () => {
       const user = { id: 'google-sub-1', email: 'user@example.com' };
       prisma.user.upsert.mockResolvedValue(user);
 
@@ -35,7 +35,7 @@ describe('AuthService', () => {
 
       expect(result).toEqual(user);
       expect(prisma.user.upsert).toHaveBeenCalledWith({
-        where: { id: 'google-sub-1' },
+        where: { email: 'user@example.com' },
         update: {},
         create: { id: 'google-sub-1', email: 'user@example.com' },
       });
