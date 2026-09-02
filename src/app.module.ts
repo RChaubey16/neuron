@@ -2,12 +2,13 @@ import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
-import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApiKeyModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { ApiKeyThrottlerGuard } from './common/guards/api-key-throttler.guard';
 import { RequestIdMiddleware } from './common/request-id.middleware';
 import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
@@ -45,7 +46,7 @@ import { validate } from './config/env.validation';
   controllers: [AppController],
   providers: [
     AppService,
-    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_GUARD, useClass: ApiKeyThrottlerGuard },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],
 })

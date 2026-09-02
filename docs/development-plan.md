@@ -119,7 +119,7 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** Make it production-safe before you actually depend on it.
 
-- [ ] Global rate limiting (e.g. `@nestjs/throttler`) per API key
+- [x] Global rate limiting (e.g. `@nestjs/throttler`) per API key — `ApiKeyThrottlerGuard` (`src/common/guards/`) overrides `ThrottlerGuard.getTracker` to key on the hashed `x-api-key` header instead of IP, falling back to the base IP tracker for unauthenticated/dashboard routes; wired globally in `AppModule` in place of the plain `ThrottlerGuard`
 - [x] Centralized error handling / exception filters (consistent error JSON shape) — `GlobalExceptionFilter` (`src/common/filters/`), global via `APP_FILTER`
 - [x] API versioning prefix (`/v1/...`) if not already done — already done for every `ApiKeyGuard` route (`/api/v1/...`); dashboard/auth/health routes are deliberately unversioned (see CLAUDE.md's Architecture section), enforced by `src/common/api-versioning.spec.ts`
 - [ ] Request validation everywhere (DTOs on all inputs)
