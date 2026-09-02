@@ -17,6 +17,7 @@ export class NotificationsService {
    * BullMQ's own retry/backoff on the job, not by this method.
    *
    * @param dto - Validated recipients/subject/body payload
+   * @returns Nothing — queues the job asynchronously
    */
   async queueEmail(dto: CreateEmailDto): Promise<void> {
     await this.emailQueue.add('send', dto, {
