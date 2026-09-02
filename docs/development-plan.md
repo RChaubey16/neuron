@@ -91,13 +91,13 @@ services (notifications, URL shortener, and future services) behind a unified AP
 **Goal:** First real service, working end-to-end.
 
 - [x] Pick an email provider (Resend, Postmark, or SES — decide when you get here)
-- [x] `NotificationsModule` with `POST /notifications/email` (`to`, `subject`, `body`/`template`)
+- [x] `NotificationsModule` with `POST /api/v1/notifications/email` (`to`, `subject`, `body`/`template`)
 - [x] Input validation via DTOs + `class-validator`
 - [x] Queue-based sending (BullMQ + Redis, or Supabase-based queue) so requests return fast and retries are handled
 - [x] Error handling: provider failure shouldn't crash the request — log + retry
 - [x] Protect route with `ApiKeyGuard`
 
-**Exit criteria:** A test app can POST to `/notifications/email` with an API key and receive an actual email.
+**Exit criteria:** A test app can POST to `/api/v1/notifications/email` with an API key and receive an actual email.
 
 ---
 
