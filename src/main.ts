@@ -6,9 +6,12 @@ import {
 import { NestFactory, Reflector } from '@nestjs/core';
 import { ConfigService } from '@nestjs/config';
 import { AppModule } from './app.module';
+import { StructuredLogger } from './common/logging/structured-logger.service';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, {
+    logger: new StructuredLogger(),
+  });
   app.enableShutdownHooks();
 
   const configService = app.get(ConfigService);

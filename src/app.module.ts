@@ -1,11 +1,13 @@
-import { Module } from '@nestjs/common';
+import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { APP_GUARD } from '@nestjs/core';
+import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { ApiKeyModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
+import { RequestIdMiddleware } from './common/request-id.middleware';
 import { HealthModule } from './health/health.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsageModule } from './usage/usage.module';
@@ -29,6 +31,14 @@ import { validate } from './config/env.validation';
     ShortUrlModule,
   ],
   controllers: [AppController],
-  providers: [AppService, { provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [
+    AppService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_FILTER, useClass: GlobalExceptionFilter },
+  ],
 })
-export class AppModule {}
+export class AppModule implements NestModule {
+  configure(consumer: MiddlewareConsumer): void {
+    consumer.apply(RequestIdMiddleware).forRoutes('*');
+  }
+}

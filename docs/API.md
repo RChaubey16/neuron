@@ -17,6 +17,17 @@ prefix. API-key-protected service routes are versioned individually, e.g.
 `/api/{version}/{service-directory}/{route}`, matching the service's module
 directory under `src/`.
 
+**Why the split:** versioning exists to protect an external contract that
+evolves independently of its consumers. Dashboard/auth/health routes are
+called only by this repo's own first-party frontend, which ships in
+lockstep with the backend — there's no separate integration a version bump
+could break. Service routes (called by other apps via `x-api-key`) *are*
+that external contract, so only those get versioned. `GET /:code` is the
+one exception on the service side — it's unauthenticated by design (meant
+for a browser to hit directly), so it stays unversioned too. This is
+enforced by a standing regression test
+(`src/common/api-versioning.spec.ts`).
+
 ## Authentication — two separate credential types
 
 Neuron has a **dual auth model**. Don't mix these up — they're different
@@ -90,16 +101,27 @@ per-API-key, for now (per-API-key rate limiting is a planned Phase 7 item).
 - Request bodies are validated with `whitelist: true, forbidNonWhitelisted:
   true`: any field not declared on the DTO is rejected with `400 Bad
   Request`, not silently dropped.
-- Error responses (any 4xx/5xx) follow Nest's default shape:
+- Error responses (any 4xx/5xx) go through a global exception filter and
+  always follow this shape, whether it's a routine `HttpException` or an
+  unexpected server-side fault:
   ```json
   {
     "statusCode": 401,
     "message": "Missing bearer token",
-    "error": "Unauthorized"
+    "error": "Unauthorized",
+    "timestamp": "2026-09-02T05:17:19.292Z",
+    "path": "/me",
+    "requestId": "d25fa7e1-5162-4bba-9cc3-15a68145380f"
   }
   ```
   `message` can be a string or (for validation errors) an array of strings,
-  one per invalid field.
+  one per invalid field. `requestId` matches the `x-request-id` response
+  header (and the caller's own `x-request-id` request header, if one was
+  sent — otherwise a generated UUID) — useful for correlating a specific
+  failed request with server-side logs. A 5xx never includes the original
+  internal error message (e.g. a raw exception or database error) in the
+  response body — only `"Internal server error"` — the real detail is
+  logged server-side instead.
 
 ---
 

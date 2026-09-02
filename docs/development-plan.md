@@ -120,10 +120,10 @@ services (notifications, URL shortener, and future services) behind a unified AP
 **Goal:** Make it production-safe before you actually depend on it.
 
 - [ ] Global rate limiting (e.g. `@nestjs/throttler`) per API key
-- [ ] Centralized error handling / exception filters (consistent error JSON shape)
-- [ ] API versioning prefix (`/v1/...`) if not already done
+- [x] Centralized error handling / exception filters (consistent error JSON shape) — `GlobalExceptionFilter` (`src/common/filters/`), global via `APP_FILTER`
+- [x] API versioning prefix (`/v1/...`) if not already done — already done for every `ApiKeyGuard` route (`/api/v1/...`); dashboard/auth/health routes are deliberately unversioned (see CLAUDE.md's Architecture section), enforced by `src/common/api-versioning.spec.ts`
 - [ ] Request validation everywhere (DTOs on all inputs)
-- [ ] Structured logging (e.g. Pino) — separate from `UsageLog`, this is for debugging/ops
+- [x] Structured logging (e.g. Pino) — separate from `UsageLog`, this is for debugging/ops — `StructuredLogger` (`src/common/logging/`), a custom `ConsoleLogger` subclass in JSON mode rather than Pino, to avoid an ESM-only dependency; correlation IDs via `RequestIdMiddleware`
 - [ ] Environment separation (dev/staging/prod Supabase projects or schemas)
 - [ ] Basic tests: guards, key hashing, one happy-path e2e test per service
 
