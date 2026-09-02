@@ -1,4 +1,6 @@
 import { Bell, Link2, type LucideIcon } from 'lucide-react';
+import { API_URL } from '@/lib/api';
+import { CodeBlock } from './curl-example';
 
 interface ServiceInfo {
   name: string;
@@ -7,6 +9,8 @@ interface ServiceInfo {
   path: string;
   status: 'Generally available' | 'Planned';
   icon: LucideIcon;
+  /** curl command and example response, shown once GA. Omitted for planned services. */
+  example?: { curl: string; response: string };
 }
 
 // Mirrors the actual state of src/ — only list a service once its module exists.
@@ -18,14 +22,35 @@ const SERVICES: ServiceInfo[] = [
     path: '/api/v1/short-url/shorten',
     status: 'Generally available',
     icon: Link2,
+    example: {
+      curl: `curl -X POST ${API_URL}/api/v1/short-url/shorten \\
+  -H "x-api-key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"originalUrl": "https://example.com/very/long/path"}'`,
+      response: `{
+  "code": "aZ3xQ2p",
+  "originalUrl": "https://example.com/very/long/path",
+  "createdAt": "2026-09-02T10:15:00.000Z",
+  "clickCount": 0
+}`,
+    },
   },
   {
     name: 'Notifications',
-    description: 'Email and webhook delivery with retries and per-channel templates.',
-    method: '—',
-    path: 'Not yet available',
-    status: 'Planned',
+    description: 'Queued email delivery via Resend, with automatic retries.',
+    method: 'POST',
+    path: '/api/v1/notifications/email',
+    status: 'Generally available',
     icon: Bell,
+    example: {
+      curl: `curl -X POST ${API_URL}/api/v1/notifications/email \\
+  -H "x-api-key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"to": ["user@example.com"], "subject": "Hello", "body": "Message body"}'`,
+      response: `{
+  "queued": true
+}`,
+    },
   },
 ];
 
@@ -76,6 +101,19 @@ export default function ServicesPage() {
             <span className="font-mono text-xs text-fg-3">
               {service.method} {service.path}
             </span>
+            {service.example && (
+              <div className="flex flex-col gap-3 border-t border-border pt-3">
+                <CodeBlock
+                  label="Example request"
+                  code={service.example.curl}
+                  copyable
+                />
+                <CodeBlock
+                  label="Example response"
+                  code={service.example.response}
+                />
+              </div>
+            )}
           </div>
         ))}
       </div>

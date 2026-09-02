@@ -1,6 +1,6 @@
 import { clearToken, getToken } from './auth-token';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
+export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000';
 const HTTP_NO_CONTENT = 204;
 
 export class ApiError extends Error {

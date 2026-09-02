@@ -1,5 +1,6 @@
 const KNOWN_SERVICE_LABELS: Record<string, string> = {
   'url-shortener': 'URL shortener',
+  'email-notifications': 'Notifications',
 };
 
 /** Maps a `UsageLog.service` slug to a display label, title-casing anything unrecognized. */
