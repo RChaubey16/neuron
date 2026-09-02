@@ -6,6 +6,7 @@ import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
 import { HealthController } from '../health/health.controller';
 import { UsageController } from '../usage/usage.controller';
 import { ShortUrlController } from '../short-url/short-url.controller';
+import { NotificationsController } from '../notifications/notifications.controller';
 
 /**
  * Regression test for the API versioning convention (see the Architecture
@@ -27,6 +28,7 @@ const ALL_CONTROLLERS = [
   ApiKeyController,
   UsageController,
   ShortUrlController,
+  NotificationsController,
 ];
 
 interface RouteInfo {

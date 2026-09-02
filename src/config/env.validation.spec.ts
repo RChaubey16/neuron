@@ -9,6 +9,10 @@ describe('validate (environment variables)', () => {
     JWT_SECRET: 'test-jwt-secret',
     FRONTEND_URL: 'http://localhost:3001',
     PORT: '3000',
+    REDIS_HOST: 'localhost',
+    REDIS_PORT: '6379',
+    RESEND_API_KEY: 'test-resend-api-key',
+    RESEND_FROM_EMAIL: 'notifications@neuron.test',
   };
 
   it('returns a validated config for a well-formed environment', () => {
@@ -84,5 +88,35 @@ describe('validate (environment variables)', () => {
     expect(() => validate({ ...validEnv, PORT: 'not-a-number' })).toThrow(
       /PORT/,
     );
+  });
+
+  it('returns validated REDIS_HOST/REDIS_PORT/RESEND_API_KEY/RESEND_FROM_EMAIL', () => {
+    const result = validate(validEnv);
+
+    expect(result.REDIS_HOST).toBe('localhost');
+    expect(result.REDIS_PORT).toBe(6379);
+    expect(result.RESEND_API_KEY).toBe('test-resend-api-key');
+    expect(result.RESEND_FROM_EMAIL).toBe('notifications@neuron.test');
+  });
+
+  it('throws when REDIS_HOST is missing', () => {
+    const { REDIS_HOST: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/REDIS_HOST/);
+  });
+
+  it('throws when REDIS_PORT is missing', () => {
+    const { REDIS_PORT: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/REDIS_PORT/);
+  });
+
+  it('throws when RESEND_API_KEY is missing', () => {
+    const { RESEND_API_KEY: _omit, ...rest } = validEnv;
+    expect(() => validate(rest)).toThrow(/RESEND_API_KEY/);
+  });
+
+  it('throws when RESEND_FROM_EMAIL is not a valid email', () => {
+    expect(() =>
+      validate({ ...validEnv, RESEND_FROM_EMAIL: 'not-an-email' }),
+    ).toThrow(/RESEND_FROM_EMAIL/);
   });
 });

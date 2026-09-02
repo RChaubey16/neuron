@@ -21,6 +21,10 @@ jobs:
       GOOGLE_CALLBACK_URL: http://localhost:3000/auth/google/callback
       JWT_SECRET: ci-placeholder-jwt-secret
       FRONTEND_URL: http://localhost:3001
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      RESEND_API_KEY: ci-placeholder-resend-key
+      RESEND_FROM_EMAIL: notifications@neuron-ci.test
     steps:
       - uses: actions/checkout@v4
 
