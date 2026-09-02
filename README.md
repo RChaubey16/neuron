@@ -34,7 +34,7 @@ one unified API.
 | `auth` | `GET /auth/google`, `GET /auth/google/callback` | Google OAuth → Nest-issued JWT |
 | `api-keys` | `POST/GET /api-keys`, `DELETE /api-keys/:id` | Create, list, revoke API keys |
 | `usage` | `GET /usage` | Per-service/day usage aggregates |
-| `short-url` | `POST /shorten`, `GET /:code` | First production service; `GET /:code` is public by design |
+| `short-url` | `POST /api/v1/short-url/shorten`, `GET /:code` | First production service; `GET /:code` is public by design |
 | `health` | `GET /health` | Liveness check, exempt from rate limiting |
 
 See [`docs/API.md`](docs/API.md) for full request/response details and a

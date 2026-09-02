@@ -55,7 +55,7 @@ describe('ShortUrl (e2e)', () => {
     );
 
     const response = await request(app.getHttpServer())
-      .post('/shorten')
+      .post('/api/v1/short-url/shorten')
       .set('x-api-key', 'nrn_validkeymaterial')
       .send({ originalUrl: 'https://example.com/path' })
       .expect(201);
@@ -67,14 +67,14 @@ describe('ShortUrl (e2e)', () => {
       data: {
         apiKeyId: 'key-1',
         service: 'url-shortener',
-        endpoint: '/shorten',
+        endpoint: '/api/v1/short-url/shorten',
       },
     });
   });
 
-  it('rejects POST /shorten with no x-api-key header', () => {
+  it('rejects POST /api/v1/short-url/shorten with no x-api-key header', () => {
     return request(app.getHttpServer())
-      .post('/shorten')
+      .post('/api/v1/short-url/shorten')
       .send({ originalUrl: 'https://example.com' })
       .expect(401);
   });

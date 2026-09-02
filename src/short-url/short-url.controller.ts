@@ -24,7 +24,7 @@ import type { ApiKey } from '../../generated/prisma';
 export class ShortUrlController {
   constructor(private readonly shortUrlService: ShortUrlService) {}
 
-  @Post('shorten')
+  @Post('api/v1/short-url/shorten')
   @HttpCode(HttpStatus.CREATED)
   @UseGuards(ApiKeyGuard)
   @Service('url-shortener')

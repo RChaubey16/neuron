@@ -11,8 +11,11 @@ followed directly in Postman (or any HTTP client). See
 http://localhost:3000
 ```
 
-(`PORT` in `.env`, default `3000`.) There is no `/v1` prefix yet — API
-versioning is a planned Phase 7 item.
+(`PORT` in `.env`, default `3000`.) Dashboard/auth routes have no version
+prefix. API-key-protected service routes are versioned individually, e.g.
+`POST /api/v1/short-url/shorten` — the convention is
+`/api/{version}/{service-directory}/{route}`, matching the service's module
+directory under `src/`.
 
 ## Authentication — two separate credential types
 
@@ -25,7 +28,7 @@ credentials, checked by different guards, for different kinds of caller.
 | Credential | Nest-issued session JWT (self-hosted Google OAuth) | API key |
 | Header | `Authorization: Bearer <token>` | `x-api-key: <raw-key>` |
 | Guard | `JwtAuthGuard` | `ApiKeyGuard` |
-| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /shorten` |
+| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/short-url/shorten` |
 
 ### Getting a session JWT (for dashboard routes, in Postman)
 
@@ -73,7 +76,7 @@ per IP), except:
 
 - `GET /health` — exempt, so uptime monitors/liveness probes are never
   throttled.
-- `POST /shorten` — tighter: **10 requests / 60s**.
+- `POST /api/v1/short-url/shorten` — tighter: **10 requests / 60s**.
 - `GET /:code` — looser: **60 requests / 60s**.
 
 A request over the limit gets `429 Too Many Requests`. This is IP-based, not
@@ -255,7 +258,7 @@ keys have no recorded usage yet.
 
 ---
 
-### `POST /shorten`
+### `POST /api/v1/short-url/shorten`
 
 Creates a shortened URL owned by the calling API key. The first real
 service route — every call here is also logged to `UsageLog` under the
@@ -318,7 +321,7 @@ real end users click these links)
 **Path params**
 | Param | Type | Notes |
 |---|---|---|
-| `code` | string | The `code` field from `POST /shorten`'s response |
+| `code` | string | The `code` field from `POST /api/v1/short-url/shorten`'s response |
 
 **Response — `302 Found`**, with a `Location` header set to the original
 URL. Postman (like a browser) will follow this automatically unless you
@@ -341,11 +344,11 @@ Recommended environment variables for a Postman collection:
 | `baseUrl` | `http://localhost:3000` | Fixed |
 | `jwt` | `eyJhbGciOi...` | `token` fragment from `GET /auth/google`'s callback redirect |
 | `apiKey` | `nrn_ab12cd34...` | `POST /api-keys`'s `key` field, or the seed script |
-| `shortCode` | `UgFiSdm` | `POST /shorten`'s `code` field |
+| `shortCode` | `UgFiSdm` | `POST /api/v1/short-url/shorten`'s `code` field |
 
 Then:
 - Dashboard requests: `{{baseUrl}}/me`, header `Authorization: Bearer {{jwt}}`
-- Service requests: `{{baseUrl}}/shorten`, header `x-api-key: {{apiKey}}`
+- Service requests: `{{baseUrl}}/api/v1/short-url/shorten`, header `x-api-key: {{apiKey}}`
 - Redirect check: `{{baseUrl}}/{{shortCode}}`
 
 **Suggested end-to-end flow to exercise the whole API in one pass:**
@@ -355,7 +358,7 @@ Then:
 3. `GET /me` — confirms the JWT works and lazily creates your `User` row.
 4. `POST /api-keys` — copy the `key` field into `{{apiKey}}`.
 5. `GET /api-keys` — confirm it's listed (without the raw key).
-6. `POST /shorten` with `{{apiKey}}` — copy the `code` field into
+6. `POST /api/v1/short-url/shorten` with `{{apiKey}}` — copy the `code` field into
    `{{shortCode}}`.
 7. `GET /{{shortCode}}` — confirm the redirect.
 8. `GET /usage` with `{{jwt}}` — confirm a `url-shortener` row now shows a
