@@ -23,22 +23,28 @@ export class EmailProcessor extends WorkerHost {
    * Sends one queued email job via Resend.
    * Rethrows any Resend failure so BullMQ's configured attempts/backoff on
    * the job retries it — this method must never swallow an error itself.
+   * Note: the Resend SDK never rejects its promise — every failure mode
+   * (bad API key, unverified domain, 4xx/5xx) resolves with
+   * `{ data: null, error: {...} }` instead, so the failure/retry path
+   * hinges on checking `error`, not on a try/catch.
    *
    * @param job - BullMQ job carrying the validated email payload
    */
   async process(job: Job<CreateEmailDto>): Promise<void> {
-    try {
-      await this.resend.emails.send({
-        from: this.fromEmail,
-        to: job.data.to,
-        subject: job.data.subject,
-        html: job.data.body,
-      });
-    } catch (error) {
+    const { data, error } = await this.resend.emails.send({
+      from: this.fromEmail,
+      to: job.data.to,
+      subject: job.data.subject,
+      html: job.data.body,
+    });
+
+    if (error) {
       this.logger.error(
-        `Failed to send email for job ${job.id}: ${(error as Error).message}`,
+        `Resend rejected email for job ${job.id}: ${error.name} (${error.statusCode ?? 'n/a'}): ${error.message}`,
       );
-      throw error;
+      throw new Error(`Resend error for job ${job.id}: ${error.message}`);
     }
+
+    this.logger.log(`Sent email for job ${job.id} (resend id: ${data?.id})`);
   }
 }

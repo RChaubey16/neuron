@@ -27,7 +27,10 @@ describe('EmailProcessor', () => {
   });
 
   it('sends the email via Resend with the job payload', async () => {
-    resend.emails.send.mockResolvedValue({ data: { id: 'email-1' }, error: null });
+    resend.emails.send.mockResolvedValue({
+      data: { id: 'email-1' },
+      error: null,
+    });
     const job = {
       id: 'job-1',
       data: {
@@ -47,7 +50,30 @@ describe('EmailProcessor', () => {
     });
   });
 
-  it('rethrows when Resend fails, so BullMQ retries the job', async () => {
+  it('throws when Resend returns an error result, so BullMQ retries the job', async () => {
+    resend.emails.send.mockResolvedValue({
+      data: null,
+      error: {
+        name: 'application_error',
+        statusCode: 403,
+        message: 'domain is not verified',
+      },
+    });
+    const job = {
+      id: 'job-3',
+      data: {
+        to: ['recipient@example.com'],
+        subject: 'Hi',
+        body: '<p>Hello</p>',
+      },
+    } as Job<CreateEmailDto>;
+
+    await expect(processor.process(job)).rejects.toThrow(
+      /domain is not verified/,
+    );
+  });
+
+  it('propagates a genuinely thrown error (e.g. a network exception), as defensive behavior', async () => {
     resend.emails.send.mockRejectedValue(new Error('resend is down'));
     const job = {
       id: 'job-2',

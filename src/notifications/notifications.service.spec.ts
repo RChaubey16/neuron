@@ -33,6 +33,8 @@ describe('NotificationsService', () => {
     expect(queue.add).toHaveBeenCalledWith('send', dto, {
       attempts: 3,
       backoff: { type: 'exponential', delay: 5000 },
+      removeOnComplete: { count: 1000, age: 86_400 },
+      removeOnFail: { count: 5000 },
     });
   });
 });

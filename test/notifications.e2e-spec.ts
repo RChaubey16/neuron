@@ -73,7 +73,12 @@ describe('Notifications (e2e)', () => {
     expect(emailQueueMock.add).toHaveBeenCalledWith(
       'send',
       { to: ['recipient@example.com'], subject: 'Test', body: '<p>Hello</p>' },
-      { attempts: 3, backoff: { type: 'exponential', delay: 5000 } },
+      {
+        attempts: 3,
+        backoff: { type: 'exponential', delay: 5000 },
+        removeOnComplete: { count: 1000, age: 86_400 },
+        removeOnFail: { count: 5000 },
+      },
     );
     expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
       data: {
