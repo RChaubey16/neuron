@@ -1,6 +1,7 @@
 import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import {
+  IsEmail,
   IsInt,
   IsOptional,
   IsString,
@@ -44,6 +45,19 @@ class EnvironmentVariables {
   @IsInt()
   @Min(1)
   PORT?: number;
+
+  @IsString()
+  REDIS_HOST: string;
+
+  @IsInt()
+  @Min(1)
+  REDIS_PORT: number;
+
+  @IsString()
+  RESEND_API_KEY: string;
+
+  @IsEmail()
+  RESEND_FROM_EMAIL: string;
 }
 
 /**
