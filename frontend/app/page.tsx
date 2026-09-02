@@ -17,17 +17,22 @@ export default function Home() {
   if (token) return null;
 
   return (
-    <div className="flex flex-1 items-center justify-center bg-zinc-50 dark:bg-black">
-      <div className="flex flex-col items-center gap-6 rounded-2xl bg-white p-10 text-center shadow-sm dark:bg-zinc-900">
-        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-50">
-          Neuron
-        </h1>
-        <p className="max-w-xs text-sm text-zinc-500 dark:text-zinc-400">
-          Sign in to manage your API keys and view usage.
-        </p>
+    <div className="flex flex-1 items-center justify-center bg-canvas px-4">
+      <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-2xl border border-border bg-surface p-10 text-center">
+        <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-accent font-display text-base font-bold text-white">
+          N
+        </span>
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-fg">
+            Neuron
+          </h1>
+          <p className="mt-2 text-sm text-fg-2">
+            Sign in to manage your API keys and view usage.
+          </p>
+        </div>
         <a
           href={googleSignInUrl()}
-          className="flex items-center gap-2 rounded-full bg-zinc-900 px-6 py-3 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200"
+          className="flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-6 py-3 text-sm font-semibold text-white shadow-[inset_0_-1px_0_rgba(16,24,40,0.15)] hover:bg-accent-hover"
         >
           Sign in with Google
         </a>

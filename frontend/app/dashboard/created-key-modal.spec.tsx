@@ -35,11 +35,33 @@ describe('CreatedKeyModal', () => {
     expect(await screen.findByText('Copied!')).toBeInTheDocument();
   });
 
-  it('calls onClose when Done is clicked', async () => {
+  it('disables Done until the "stored safely" checkbox is checked', async () => {
     const onClose = vi.fn();
     const user = userEvent.setup();
     render(<CreatedKeyModal apiKey={apiKey} onClose={onClose} />);
 
+    const doneButton = screen.getByRole('button', { name: 'Done' });
+    expect(doneButton).toBeDisabled();
+
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'I have stored this key somewhere safe.',
+      }),
+    );
+
+    expect(doneButton).toBeEnabled();
+  });
+
+  it('calls onClose when Done is clicked after confirming', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    render(<CreatedKeyModal apiKey={apiKey} onClose={onClose} />);
+
+    await user.click(
+      screen.getByRole('checkbox', {
+        name: 'I have stored this key somewhere safe.',
+      }),
+    );
     await user.click(screen.getByRole('button', { name: 'Done' }));
 
     expect(onClose).toHaveBeenCalledOnce();

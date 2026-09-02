@@ -25,10 +25,10 @@ export default function AuthCallbackPage() {
 
   if (token === null) {
     return (
-      <div className="flex flex-1 items-center justify-center">
-        <p className="text-sm text-red-600">
+      <div className="flex flex-1 items-center justify-center bg-canvas">
+        <p className="text-sm text-danger">
           Sign-in failed — no token received.{' '}
-          <Link href="/" className="underline">
+          <Link href="/" className="text-accent underline">
             Try again
           </Link>
           .
@@ -38,8 +38,8 @@ export default function AuthCallbackPage() {
   }
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <p className="text-sm text-zinc-500">Signing you in…</p>
+    <div className="flex flex-1 items-center justify-center bg-canvas">
+      <p className="text-sm text-fg-2">Signing you in…</p>
     </div>
   );
 }
