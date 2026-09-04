@@ -82,9 +82,17 @@ don't backfill from memory once details fade.
 
 ---
 
-## Phase 5 — Notifications Service (Email) 🚧
+## Phase 5 — Notifications Service (Email) ✅
 
-_Tweets go here once a test app can POST to `/notifications/email` with an API key and an email actually arrives._
+1. `NotificationsModule` ships: `POST /api/v1/notifications/email`, same `ApiKeyGuard` + `@Service()` + `UsageLoggingInterceptor` pattern as the URL shortener. Sending goes through a BullMQ + Redis queue instead of synchronously — the route returns `202 { queued: true }` the moment the job's on the queue, retries (3 attempts, exponential backoff) handled by the worker.
+
+2. First verification pass looked clean — email sent, logs quiet — but couldn't actually tell success from failure. Turns out the Resend SDK never rejects its promise: a bad API key, an unverified domain, a 4xx/5xx from their API all resolve as `{ data: null, error: {...} }` instead of throwing. My `try/catch` around `resend.emails.send()` was dead code the whole time — every job was silently marked "sent" no matter what actually happened. Confirmed by reading Resend's own SDK source.
+
+3. Fixed: `EmailProcessor.process` now checks the discriminated `{ data, error }` result directly — throws on `error` (so BullMQ's retry policy actually engages) and logs the real Resend delivery id on success.
+
+4. Re-verified against the real running stack, this time with actual proof instead of absence-of-error: a send to Resend's own verified address returned `202` and logged a real delivery id. A send to an address outside that account hit Resend's "can only send to your own email" restriction — and *this time* it logged the rejection and got retried by BullMQ (~5s later, matching the backoff curve). That retry firing at all is the negative-path proof the fix works.
+
+5. Phase 5 done: second real service, same reusable pattern, plus a genuine "verification wasn't actually verifying anything" bug caught before it shipped. `GET /usage` now shows `email-notifications` right next to `url-shortener`. 📧
 
 ---
 
@@ -106,7 +114,19 @@ _Tweets go here once a test app can POST to `/notifications/email` with an API k
 
 ## Phase 7 — Hardening & Cross-Cutting Concerns 🚧
 
-_Tweets go here once rate limiting, centralized error handling, versioning, and structured logging are in place._
+1. Kicked off hardening: rate limiting moved from per-IP to **per API key** — `ApiKeyThrottlerGuard` hashes the incoming `x-api-key` and keys the counter on that instead of IP, so callers behind the same NAT don't share a quota and one caller can't dodge limits by rotating IPs. Registered globally, falls back to IP tracking for dashboard/unauthenticated routes.
+
+2. Added a `GlobalExceptionFilter` so every error response — routine `HttpException` or an unexpected server-side fault — comes back in one consistent JSON shape with a `requestId` for correlating with server logs. A raw exception or DB error never reaches the caller; only `"Internal server error"`, with the real detail logged server-side.
+
+3. Structured logging via a custom `ConsoleLogger` subclass in JSON mode instead of Pino — dodging yet another ESM-only-dependency trap this project's hit a few times already. Paired with an `AsyncLocalStorage`-based request-id middleware so every log line (Nest's own included) carries a correlation id without threading it through every call signature.
+
+4. API versioning turned out to already be correctly implemented (only `ApiKeyGuard` routes get `/api/v1/...`) — formalized it as a standing regression test that reflects on route/guard metadata instead of booting the whole app, then proved it actually catches a regression by temporarily de-versioning a route and watching the test fail before reverting.
+
+5. Ran the `nestjs-best-practices` skill as an audit pass and it earned its keep: two path params (`DELETE /api-keys/:id`, `GET /:code`) had zero format validation before hitting the database, and — worse — two of the e2e suites never wired up the same `ValidationPipe` config the real app runs, so validation on DTOs that already existed had never actually been exercised in those tests. Both fixed, with new 400-path e2e coverage.
+
+6. Same audit pass caught all three fire-and-forget writes in the codebase (`lastUsedAt`, `UsageLog`, `clickCount`) swallowing failures with an empty `.catch(() => {})` — non-blocking was always the right call, silent never was. They log now, with a regression test per site proving the failure path is reachable.
+
+7. One item left before Phase 7's done: environment separation (dev/staging/prod Supabase projects or schemas). Everything else — rate limiting, error handling, versioning, structured logging, request validation, and baseline test coverage — is in place. 🚧
 
 ---
 

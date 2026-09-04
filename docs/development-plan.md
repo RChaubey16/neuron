@@ -7,7 +7,7 @@
 A single NestJS + Supabase (Postgres via Prisma) platform exposing shared backend
 services (notifications, URL shortener, and future services) behind a unified API.
 
-- **Humans** log in via Google OAuth (Supabase Auth) to a dashboard to manage API keys.
+- **Humans** log in via self-hosted Google OAuth (Nest-issued session JWTs) to a dashboard to manage API keys.
 - **Machines** (other apps) call service endpoints using an API key (`x-api-key` header).
 - Every service call is recorded in a `UsageLog` for analytics/debugging.
 
@@ -20,7 +20,7 @@ services (notifications, URL shortener, and future services) behind a unified AP
 - [x] Init NestJS project (`nest new`)
 - [x] Create Supabase project (Postgres + Auth, Google provider enabled)
 - [x] Install & configure Prisma, point `DATABASE_URL` at Supabase Postgres
-- [x] Set up `.env` structure (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_JWT_SECRET`, `DATABASE_URL`)
+- [x] Set up `.env` structure — later reshaped by the Phase 2 migration off Supabase Auth; see `.env.example` for the current set (`DATABASE_URL` for Supabase Postgres, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_CALLBACK_URL`, `JWT_SECRET`, `FRONTEND_URL`, plus Redis/Resend vars added in later phases)
 - [x] Set up base `PrismaModule` / `PrismaService` (global module)
 - [x] Set up basic health check route (`GET /health`)
 - [x] Set up ESLint/Prettier, basic CI (lint + build on push)
@@ -46,14 +46,20 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 ---
 
-## Phase 2 — Dashboard Auth (Google OAuth via Supabase)
+## Phase 2 — Dashboard Auth (Self-Hosted Google OAuth + Nest JWTs)
 
 **Goal:** A human can log in with Google and get a valid session.
 
-- [x] Configure Google OAuth provider in Supabase Auth settings
-- [x] Frontend (even a minimal one, or Postman/manual flow first) triggers Supabase Google login (`scripts/manual-google-login.html`, a throwaway dev-only page)
-- [x] On first login, sync Supabase `auth.users` record into your own `User` table (lazy-create-on-first-request, via `AuthService.verifyAndSyncUser`)
-- [x] Build `SupabaseJwtGuard` in NestJS — verifies the Supabase JWT on incoming dashboard requests (against Supabase's JWKS, since this project signs tokens with an asymmetric key, not the legacy shared secret)
+> Originally built on Supabase Auth (Supabase-issued JWTs, verified against
+> Supabase's JWKS). Migrated mid-phase to self-hosted Google OAuth with
+> Nest-issued session JWTs instead — Supabase is database-only now. The
+> checklist below reflects what actually shipped; see CLAUDE.md's "Prisma /
+> Nest gotchas" section for the migration's specific traps.
+
+- [x] Register a Google Cloud OAuth client (`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_CALLBACK_URL`) — Neuron drives the OAuth handshake itself via `passport-google-oauth20`, not Supabase Auth
+- [x] `GET /auth/google` (via `GoogleStrategy`) redirects to Google's consent screen directly; `GET /auth/google/callback` completes the handshake and redirects to `${FRONTEND_URL}/auth/callback#token=<jwt>` — no separate manual-login page needed once this landed (the original throwaway `scripts/manual-google-login.html` was removed)
+- [x] On first login, lazily create the local `User` row from the verified Google profile (`AuthService.findOrCreateUser`, upserted on `email` — the column with the actual unique constraint — with `id` set to Google's `sub` claim on creation)
+- [x] Build `JwtAuthGuard` in NestJS — verifies a Nest-issued session JWT (`@nestjs/jwt`, signed with `JWT_SECRET`) on incoming dashboard requests; the token itself is issued by `AuthService.signToken` right after a successful Google login
 - [x] Protected test route: `GET /me` returns the logged-in user's profile
 
 **Exit criteria:** Logging in via Google and hitting `GET /me` with the session token returns the correct user.

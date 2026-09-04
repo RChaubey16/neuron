@@ -39,7 +39,7 @@ credentials, checked by different guards, for different kinds of caller.
 | Credential | Nest-issued session JWT (self-hosted Google OAuth) | API key |
 | Header | `Authorization: Bearer <token>` | `x-api-key: <raw-key>` |
 | Guard | `JwtAuthGuard` | `ApiKeyGuard` |
-| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/short-url/shorten` |
+| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/notifications/email`, `POST /api/v1/short-url/shorten` |
 
 ### Getting a session JWT (for dashboard routes, in Postman)
 
@@ -82,16 +82,22 @@ still need a real `GET /auth/google` login.
 
 ## Rate limiting
 
-All routes are rate-limited via a global default (**20 requests / 60s**,
-per IP), except:
+All routes are rate-limited via a global default (**20 requests / 60s**),
+except:
 
 - `GET /health` — exempt, so uptime monitors/liveness probes are never
   throttled.
+- `POST /api/v1/notifications/email` — tighter: **10 requests / 60s**.
 - `POST /api/v1/short-url/shorten` — tighter: **10 requests / 60s**.
 - `GET /:code` — looser: **60 requests / 60s**.
 
-A request over the limit gets `429 Too Many Requests`. This is IP-based, not
-per-API-key, for now (per-API-key rate limiting is a planned Phase 7 item).
+A request over the limit gets `429 Too Many Requests`. Limits are tracked
+**per API key** (`ApiKeyThrottlerGuard` hashes the incoming `x-api-key`
+header and keys the counter on that), not per IP — so one caller can't burn
+through another caller's quota just by sharing a NAT/proxy, and a single
+caller can't dodge the limit by rotating IPs. Requests with no `x-api-key`
+(dashboard/auth/health routes, and the unauthenticated `GET /:code`
+redirect) fall back to per-IP tracking instead.
 
 ## Response conventions
 
@@ -100,7 +106,10 @@ per-API-key, for now (per-API-key rate limiting is a planned Phase 7 item).
   returned, even internally).
 - Request bodies are validated with `whitelist: true, forbidNonWhitelisted:
   true`: any field not declared on the DTO is rejected with `400 Bad
-  Request`, not silently dropped.
+  Request`, not silently dropped. Route path params are validated the same
+  way (e.g. `DELETE /api-keys/:id`'s `id`, `GET /:code`'s `code`) — a
+  malformed param is rejected with `400` before it ever reaches the
+  database, rather than falling through to a `404`.
 - Error responses (any 4xx/5xx) go through a global exception filter and
   always follow this shape, whether it's a routine `HttpException` or an
   unexpected server-side fault:
@@ -240,7 +249,7 @@ no longer authenticate service requests.
 **Path params**
 | Param | Type | Notes |
 |---|---|---|
-| `id` | string (uuid) | The `id` field from `POST`/`GET /api-keys` — not the raw key itself |
+| `id` | string (uuid v4) | The `id` field from `POST`/`GET /api-keys` — not the raw key itself. Must be a well-formed UUID or the request is rejected before the database is queried. |
 
 **Response — `204 No Content`** (empty body)
 
@@ -248,6 +257,7 @@ no longer authenticate service requests.
 | Status | When |
 |---|---|
 | `401 Unauthorized` | Missing/invalid bearer token |
+| `400 Bad Request` | `id` isn't a valid UUID |
 | `404 Not Found` | The key doesn't exist, isn't owned by the caller, or is already revoked |
 
 ---
@@ -277,6 +287,55 @@ keys have no recorded usage yet.
 | Status | When |
 |---|---|
 | `401 Unauthorized` | Missing/invalid bearer token |
+
+---
+
+### `POST /api/v1/notifications/email`
+
+Queues an email for delivery via Resend. **Fire-and-forget by design** —
+this returns as soon as the job is queued (BullMQ + Redis), not once the
+email actually sends. There's no status/lookup endpoint; check server logs
+if you need delivery confirmation. Every call is logged to `UsageLog` under
+the `email-notifications` service.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Rate limit:** 10 requests / 60s (tighter than the global default)
+
+**Request body**
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `to` | string[] (email) | Yes | 1–50 recipients, each a valid email address |
+| `subject` | string | Yes | Non-empty, max 200 chars |
+| `body` | string | Yes | Non-empty, max 100,000 chars. HTML is sent as-is (Resend renders it) |
+
+```json
+{
+  "to": ["recipient@example.com"],
+  "subject": "Your report is ready",
+  "body": "<p>Hello — your report is attached.</p>"
+}
+```
+
+**Response — `202 Accepted`**
+```json
+{ "queued": true }
+```
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `400 Bad Request` | `to` is empty/not emails/over 50 recipients, or `subject`/`body` is empty or over its max length |
+| `429 Too Many Requests` | Rate limit exceeded |
+
+A queued job retries up to 3 times (exponential backoff) if Resend rejects
+it or the send otherwise fails — this all happens after the `202` response,
+so it's invisible to the caller. Note: the Resend account backing this API
+may have no verified sending domain in dev/staging, in which case every send
+fails with a `validation_error`/403 logged server-side regardless of the
+request being well-formed — that's a Resend account configuration issue,
+not a bug in this endpoint.
 
 ---
 
@@ -343,7 +402,7 @@ real end users click these links)
 **Path params**
 | Param | Type | Notes |
 |---|---|---|
-| `code` | string | The `code` field from `POST /api/v1/short-url/shorten`'s response |
+| `code` | string | The `code` field from `POST /api/v1/short-url/shorten`'s response. Must be exactly 7 characters from `[A-Za-z0-9_-]` (nanoid's alphabet) or the request is rejected before the database is queried. |
 
 **Response — `302 Found`**, with a `Location` header set to the original
 URL. Postman (like a browser) will follow this automatically unless you
@@ -352,7 +411,8 @@ disable redirect-following in its settings to inspect the header directly.
 **Errors**
 | Status | When |
 |---|---|
-| `404 Not Found` | No `ShortUrl` exists for that code |
+| `400 Bad Request` | `code` isn't 7 characters from the expected alphabet (e.g. wrong length, or contains a character nanoid never generates) |
+| `404 Not Found` | `code` is well-formed but no `ShortUrl` exists for it |
 | `429 Too Many Requests` | Rate limit exceeded |
 
 ---
@@ -383,7 +443,9 @@ Then:
 6. `POST /api/v1/short-url/shorten` with `{{apiKey}}` — copy the `code` field into
    `{{shortCode}}`.
 7. `GET /{{shortCode}}` — confirm the redirect.
-8. `GET /usage` with `{{jwt}}` — confirm a `url-shortener` row now shows a
-   count of at least 1.
-9. `DELETE /api-keys/:id` — revoke the key, then repeat step 6 and confirm
-   it now returns `401`.
+8. `POST /api/v1/notifications/email` with `{{apiKey}}` — confirm `202
+   { "queued": true }`.
+9. `GET /usage` with `{{jwt}}` — confirm `url-shortener` and
+   `email-notifications` rows now each show a count of at least 1.
+10. `DELETE /api-keys/:id` — revoke the key, then repeat step 6 (or step 8)
+    and confirm it now returns `401`.
