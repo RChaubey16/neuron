@@ -3,6 +3,7 @@ import {
   CanActivate,
   ExecutionContext,
   Injectable,
+  Logger,
   UnauthorizedException,
 } from '@nestjs/common';
 import { Request } from 'express';
@@ -11,6 +12,8 @@ import { ApiKey } from '../../../generated/prisma';
 
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
+  private readonly logger = new Logger(ApiKeyGuard.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -47,7 +50,12 @@ export class ApiKeyGuard implements CanActivate {
         where: { id: apiKey.id },
         data: { lastUsedAt: new Date() },
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to update lastUsedAt for API key ${apiKey.id}`,
+          error instanceof Error ? error.stack : error,
+        );
+      });
 
     return true;
   }

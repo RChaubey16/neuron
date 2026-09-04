@@ -15,6 +15,7 @@ import { ApiKeyService } from './api-keys.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import { ApiKeyResponseDto } from './dto/api-key-response.dto';
 import { CreatedApiKeyResponseDto } from './dto/created-api-key-response.dto';
+import { RevokeApiKeyParamsDto } from './dto/revoke-api-key-params.dto';
 import type { User } from '../../generated/prisma';
 
 @Controller('api-keys')
@@ -37,7 +38,10 @@ export class ApiKeyController {
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
-  revoke(@CurrentUser() user: User, @Param('id') id: string): Promise<void> {
-    return this.apiKeyService.revoke(user.id, id);
+  revoke(
+    @CurrentUser() user: User,
+    @Param() params: RevokeApiKeyParamsDto,
+  ): Promise<void> {
+    return this.apiKeyService.revoke(user.id, params.id);
   }
 }

@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { nanoid } from 'nanoid';
@@ -9,11 +10,13 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateShortUrlDto } from './dto/create-short-url.dto';
 import { ShortUrlResponseDto } from './dto/short-url-response.dto';
 
-const CODE_LENGTH = 7;
+export const CODE_LENGTH = 7;
 const MAX_CREATE_ATTEMPTS = 5;
 
 @Injectable()
 export class ShortUrlService {
+  private readonly logger = new Logger(ShortUrlService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -77,7 +80,12 @@ export class ShortUrlService {
         where: { code },
         data: { clickCount: { increment: 1 } },
       })
-      .catch(() => {});
+      .catch((error: unknown) => {
+        this.logger.error(
+          `Failed to increment clickCount for short code ${code}`,
+          error instanceof Error ? error.stack : error,
+        );
+      });
 
     return shortUrl.originalUrl;
   }

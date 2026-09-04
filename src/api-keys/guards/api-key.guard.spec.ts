@@ -1,5 +1,9 @@
 import { createHash } from 'crypto';
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import {
+  ExecutionContext,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ApiKeyGuard } from './api-key.guard';
 import { PrismaService } from '../../prisma/prisma.service';
@@ -104,5 +108,25 @@ describe('ApiKeyGuard', () => {
     expect(updateArgs.where).toEqual({ id: 'key-1' });
     expect(updateArgs.data.lastUsedAt).toBeInstanceOf(Date);
     expect(subscribed).toBe(true);
+  });
+
+  it('logs an error when the lastUsedAt update fails, without failing the request', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    const rawKey = 'nrn_validkeymaterial';
+    const apiKey = { id: 'key-1', userId: 'user-1', revokedAt: null };
+    prisma.apiKey.findFirst.mockResolvedValue(apiKey);
+    prisma.apiKey.update.mockRejectedValue(new Error('connection reset'));
+    const { context } = contextFor({ 'x-api-key': rawKey });
+
+    const result = await guard.canActivate(context);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(result).toBe(true);
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('key-1'),
+      expect.anything(),
+    );
+
+    errorSpy.mockRestore();
   });
 });

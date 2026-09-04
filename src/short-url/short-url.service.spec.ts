@@ -1,4 +1,4 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ShortUrlService } from './short-url.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -161,6 +161,29 @@ describe('ShortUrlService', () => {
       await service.resolve('abc1234');
 
       expect(subscribed).toBe(true);
+    });
+
+    it('logs an error when the clickCount update fails, without failing the redirect', async () => {
+      const errorSpy = jest
+        .spyOn(Logger.prototype, 'error')
+        .mockImplementation();
+      prisma.shortUrl.findUnique.mockResolvedValue({
+        code: 'abc1234',
+        originalUrl: 'https://example.com',
+        clickCount: 0,
+      });
+      prisma.shortUrl.update.mockRejectedValue(new Error('connection reset'));
+
+      const originalUrl = await service.resolve('abc1234');
+      await new Promise((resolve) => setImmediate(resolve));
+
+      expect(originalUrl).toBe('https://example.com');
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('abc1234'),
+        expect.anything(),
+      );
+
+      errorSpy.mockRestore();
     });
   });
 });

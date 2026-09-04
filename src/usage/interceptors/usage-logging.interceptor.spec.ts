@@ -1,4 +1,4 @@
-import { CallHandler, ExecutionContext } from '@nestjs/common';
+import { CallHandler, ExecutionContext, Logger } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import { Test, TestingModule } from '@nestjs/testing';
 import { lastValueFrom, of, throwError } from 'rxjs';
@@ -127,5 +127,25 @@ describe('UsageLoggingInterceptor', () => {
     await lastValueFrom(interceptor.intercept(context, handlerReturning({})));
 
     expect(subscribed).toBe(true);
+  });
+
+  it('logs an error when the UsageLog write fails, without failing the response', async () => {
+    const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
+    reflector.get.mockReturnValue('notifications');
+    prisma.usageLog.create.mockRejectedValue(new Error('connection reset'));
+    const context = contextFor({ id: 'key-1' }, '/notifications/email');
+
+    const result = await lastValueFrom(
+      interceptor.intercept(context, handlerReturning({ ok: true })),
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(result).toEqual({ ok: true });
+    expect(errorSpy).toHaveBeenCalledWith(
+      expect.stringContaining('notifications'),
+      expect.anything(),
+    );
+
+    errorSpy.mockRestore();
   });
 });

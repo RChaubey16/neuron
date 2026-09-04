@@ -1,4 +1,10 @@
-import { Controller, Get, INestApplication, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  INestApplication,
+  UseGuards,
+  ValidationPipe,
+} from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
@@ -50,6 +56,13 @@ describe('ApiKeyController (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 
@@ -125,15 +138,16 @@ describe('ApiKeyController (e2e)', () => {
   });
 
   it('revokes a key, and a revoked key can no longer authenticate a service request', async () => {
+    const keyId = '11111111-1111-4111-8111-111111111111';
     prismaMock.apiKey.findFirst.mockResolvedValueOnce({
-      id: 'key-1',
+      id: keyId,
       userId: user.id,
       revokedAt: null,
     });
     prismaMock.apiKey.update.mockResolvedValue({});
 
     await request(app.getHttpServer())
-      .delete('/api-keys/key-1')
+      .delete(`/api-keys/${keyId}`)
       .set('Authorization', 'Bearer valid-token')
       .expect(204);
 
@@ -144,6 +158,15 @@ describe('ApiKeyController (e2e)', () => {
       .get('/test-service')
       .set('x-api-key', 'nrn_whateverkeywasrevoked')
       .expect(401);
+  });
+
+  it('rejects DELETE /api-keys/:id with a non-UUID id, without querying the DB', async () => {
+    await request(app.getHttpServer())
+      .delete('/api-keys/not-a-uuid')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(400);
+
+    expect(prismaMock.apiKey.findFirst).not.toHaveBeenCalled();
   });
 
   it('rejects a service request with no x-api-key header', () => {

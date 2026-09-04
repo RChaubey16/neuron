@@ -122,10 +122,10 @@ services (notifications, URL shortener, and future services) behind a unified AP
 - [x] Global rate limiting (e.g. `@nestjs/throttler`) per API key — `ApiKeyThrottlerGuard` (`src/common/guards/`) overrides `ThrottlerGuard.getTracker` to key on the hashed `x-api-key` header instead of IP, falling back to the base IP tracker for unauthenticated/dashboard routes; wired globally in `AppModule` in place of the plain `ThrottlerGuard`
 - [x] Centralized error handling / exception filters (consistent error JSON shape) — `GlobalExceptionFilter` (`src/common/filters/`), global via `APP_FILTER`
 - [x] API versioning prefix (`/v1/...`) if not already done — already done for every `ApiKeyGuard` route (`/api/v1/...`); dashboard/auth/health routes are deliberately unversioned (see CLAUDE.md's Architecture section), enforced by `src/common/api-versioning.spec.ts`
-- [ ] Request validation everywhere (DTOs on all inputs)
+- [x] Request validation everywhere (DTOs on all inputs)
 - [x] Structured logging (e.g. Pino) — separate from `UsageLog`, this is for debugging/ops — `StructuredLogger` (`src/common/logging/`), a custom `ConsoleLogger` subclass in JSON mode rather than Pino, to avoid an ESM-only dependency; correlation IDs via `RequestIdMiddleware`
 - [ ] Environment separation (dev/staging/prod Supabase projects or schemas)
-- [ ] Basic tests: guards, key hashing, one happy-path e2e test per service
+- [x] Basic tests: guards, key hashing, one happy-path e2e test per service
 
 **Exit criteria:** You'd trust this running unattended for a real side project.
 

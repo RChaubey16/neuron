@@ -1,4 +1,4 @@
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -30,6 +30,13 @@ describe('ShortUrl (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
+    app.useGlobalPipes(
+      new ValidationPipe({
+        whitelist: true,
+        forbidNonWhitelisted: true,
+        transform: true,
+      }),
+    );
     await app.init();
   });
 
@@ -100,7 +107,15 @@ describe('ShortUrl (e2e)', () => {
   it('returns 404 for an unknown code', async () => {
     prismaMock.shortUrl.findUnique.mockResolvedValue(null);
 
-    await request(app.getHttpServer()).get('/nosuchcode').expect(404);
+    // Well-formed (7 URL-safe chars) but not present in the DB.
+    await request(app.getHttpServer()).get('/zzz9999').expect(404);
+  });
+
+  it('returns 400 for a malformed code, without querying the DB', async () => {
+    // Wrong length for nanoid's 7-char codes.
+    await request(app.getHttpServer()).get('/short').expect(400);
+
+    expect(prismaMock.shortUrl.findUnique).not.toHaveBeenCalled();
   });
 
   it('does not let the catch-all /:code route shadow other top-level routes', async () => {

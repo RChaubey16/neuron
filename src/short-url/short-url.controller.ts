@@ -18,6 +18,7 @@ import { UsageLoggingInterceptor } from '../usage/interceptors/usage-logging.int
 import { ShortUrlService } from './short-url.service';
 import { CreateShortUrlDto } from './dto/create-short-url.dto';
 import { ShortUrlResponseDto } from './dto/short-url-response.dto';
+import { ShortUrlCodeParamsDto } from './dto/short-url-code-params.dto';
 import type { ApiKey } from '../../generated/prisma';
 
 @Controller()
@@ -45,8 +46,10 @@ export class ShortUrlController {
   @Get(':code')
   @Throttle({ default: { limit: 60, ttl: 60_000 } })
   @Redirect()
-  async redirect(@Param('code') code: string): Promise<{ url: string }> {
-    const url = await this.shortUrlService.resolve(code);
+  async redirect(
+    @Param() params: ShortUrlCodeParamsDto,
+  ): Promise<{ url: string }> {
+    const url = await this.shortUrlService.resolve(params.code);
     return { url };
   }
 }

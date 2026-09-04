@@ -2,6 +2,7 @@ import {
   CallHandler,
   ExecutionContext,
   Injectable,
+  Logger,
   NestInterceptor,
 } from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
@@ -14,6 +15,8 @@ import { ApiKey } from '../../../generated/prisma';
 
 @Injectable()
 export class UsageLoggingInterceptor implements NestInterceptor {
+  private readonly logger = new Logger(UsageLoggingInterceptor.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly reflector: Reflector,
@@ -54,7 +57,12 @@ export class UsageLoggingInterceptor implements NestInterceptor {
               endpoint: request.route.path,
             },
           })
-          .catch(() => {});
+          .catch((error: unknown) => {
+            this.logger.error(
+              `Failed to write UsageLog for ${service}/${request.route.path}`,
+              error instanceof Error ? error.stack : error,
+            );
+          });
       }),
     );
   }
