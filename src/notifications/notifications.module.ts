@@ -4,8 +4,8 @@ import { UsageModule } from '../usage/usage.module';
 import { ApiKeyModule } from '../api-keys/api-keys.module';
 import { NotificationsController } from './notifications.controller';
 import { NotificationsService } from './notifications.service';
-import { EmailProcessor } from './email.processor';
-import { resendClientProvider } from './resend-client.provider';
+import { EmailProcessor } from './processors/email.processor';
+import { resendClientProvider } from './providers/resend-client.provider';
 
 @Module({
   // ApiKeyModule/UsageModule are imported explicitly for

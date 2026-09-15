@@ -37,6 +37,7 @@ model ApiKey {
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageLogs UsageLog[]
   shortUrls ShortUrl[]
+  emailJobs EmailJob[]
 
   @@index([userId])
 }
@@ -65,6 +66,36 @@ model ShortUrl {
   apiKeyId    String
   createdAt   DateTime @default(now())
   clickCount  Int      @default(0)
+
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  @@index([apiKeyId])
+}
+
+enum EmailJobStatus {
+  QUEUED
+  PROCESSING
+  SENT
+  FAILED
+  CANCELLED
+}
+
+/// A queued email send, tracked durably in Postgres since BullMQ's own Redis
+/// job state is transient (pruned by `removeOnComplete`/`removeOnFail`) and
+/// was never meant as a queryable history. `id` doubles as the underlying
+/// BullMQ job's `jobId`, so the two never need reconciling.
+model EmailJob {
+  id           String         @id @default(uuid())
+  apiKeyId     String
+  status       EmailJobStatus @default(QUEUED)
+  to           String[]
+  subject      String
+  body         String
+  error        String?
+  attemptsMade Int            @default(0)
+  resendId     String?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 
   apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
 
