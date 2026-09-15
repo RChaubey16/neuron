@@ -65,6 +65,21 @@ pnpm run lint
 pnpm run build
 ```
 
+## Deployment
+
+| | URL | Host |
+|---|---|---|
+| API (backend) | [`neuron-api.ruturaj.xyz`](https://neuron-api.ruturaj.xyz) | Hostinger VPS via [Coolify](https://coolify.io/), Docker Compose build pack (`docker-compose.coolify.yml`) |
+| Dashboard (frontend) | [`neuron.ruturaj.xyz`](https://neuron.ruturaj.xyz) | Vercel |
+
+`docker-compose.coolify.yml` is a deployment-only variant of `docker-compose.yml`:
+it drops the dev-mode `frontend` service (not deployable — it runs `next dev`
+off a bind mount), doesn't publish Redis's port publicly (that image has no
+auth), and takes its env vars from Coolify's Environment Variables UI instead
+of a checked-in `.env` (which is gitignored and wouldn't exist in Coolify's
+git checkout). It still builds the `app` service from the same root
+`Dockerfile` as local dev — no second build path.
+
 ## Tech stack
 
 - **Framework:** NestJS 11 (TypeScript)
@@ -74,7 +89,7 @@ pnpm run build
 - **Rate limiting:** `@nestjs/throttler`
 - **Queue:** BullMQ + Redis (email notifications)
 - **Testing:** Jest (unit + e2e)
-- **Deployment:** Multi-stage Docker image
+- **Deployment:** Multi-stage Docker image, deployed via Coolify (backend) + Vercel (frontend)
 
 ## Docs
 

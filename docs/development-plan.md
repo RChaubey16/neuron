@@ -141,9 +141,9 @@ services (notifications, URL shortener, and future services) behind a unified AP
 
 **Goal:** Live and reachable, running from the same Docker image built since Phase 0.
 
-- [ ] Pick host that runs containers directly (Railway, Render, Fly.io, or a VPS with `docker compose` — since the app is already containerized, avoid re-buildpacking it)
-- [ ] Push image to a registry (Docker Hub, GHCR, or host's built-in registry)
-- [ ] Set production env vars (Supabase prod project, Redis if used, email provider keys)
+- [x] Pick host that runs containers directly (Railway, Render, Fly.io, or a VPS with `docker compose` — since the app is already containerized, avoid re-buildpacking it) — Hostinger VPS running Coolify, Docker Compose build pack (`docker-compose.coolify.yml`, a Coolify-specific compose file separate from the local-dev one: no dev-mode frontend service, no publicly-exposed Redis port, env vars injected by Coolify instead of a checked-in `.env`)
+- [ ] Push image to a registry (Docker Hub, GHCR, or host's built-in registry) — not applicable to this hosting choice: Coolify builds directly from the git repo on the VPS itself (via the same root `Dockerfile`), there's no separate registry push step in this workflow
+- [x] Set production env vars (Supabase prod project, Redis if used, email provider keys) — set via Coolify's Environment Variables UI for the backend (`DATABASE_URL`, `JWT_SECRET`, `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_CALLBACK_URL`, `FRONTEND_URL`, `RESEND_API_KEY`/`RESEND_FROM_EMAIL`) and via Vercel for the frontend (`NEXT_PUBLIC_API_URL`)
 - [ ] Set up basic uptime monitoring / alerting
 - [ ] Point a real side-project app at it for a live end-to-end test
 

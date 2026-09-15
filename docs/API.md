@@ -8,7 +8,8 @@ followed directly in Postman (or any HTTP client). See
 ## Base URL
 
 ```
-http://localhost:3000
+http://localhost:3000          # local dev
+https://neuron-api.ruturaj.xyz # production (Coolify)
 ```
 
 (`PORT` in `.env`, default `3000`.) Dashboard/auth routes have no version
