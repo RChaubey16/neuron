@@ -38,7 +38,7 @@ function KeyNameInput({
 }) {
   return (
     <form
-      className={`flex gap-2 ${className}`}
+      className={`flex min-w-0 gap-2 ${className}`}
       onSubmit={(e) => {
         e.preventDefault();
         onSubmit();
@@ -48,7 +48,7 @@ function KeyNameInput({
         value={name}
         onChange={(e) => onChange(e.target.value)}
         placeholder="e.g. production-web"
-        className="flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+        className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
       />
       <button
         type="submit"
@@ -149,8 +149,8 @@ export function ApiKeysSection() {
 
           <div className="overflow-hidden rounded-xl border border-border bg-surface">
             {keysQuery.status === 'pending' && (
-              <div className="divide-y divide-border">
-                <div className="grid grid-cols-5 gap-4 px-5 py-3 text-xs font-medium tracking-wide text-fg-3">
+              <div className="divide-y divide-border overflow-x-auto">
+                <div className="grid min-w-[640px] grid-cols-5 gap-4 px-5 py-3 text-xs font-medium tracking-wide text-fg-3">
                   {['NAME', 'KEY', 'CREATED', 'LAST USED', 'STATUS'].map(
                     (h) => (
                       <span key={h}>{h}</span>
@@ -160,7 +160,7 @@ export function ApiKeysSection() {
                 {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
                   <div
                     key={i}
-                    className="grid grid-cols-5 items-center gap-4 px-5 py-4"
+                    className="grid min-w-[640px] grid-cols-5 items-center gap-4 px-5 py-4"
                   >
                     {Array.from({ length: 5 }).map((__, j) => (
                       <span
@@ -197,7 +197,8 @@ export function ApiKeysSection() {
 
             {keysQuery.status === 'success' && keys && keys.length > 0 && (
               <>
-                <table className="w-full text-left text-sm">
+                <div className="overflow-x-auto">
+                <table className="w-full min-w-[640px] text-left text-sm">
                   <thead>
                     <tr className="border-b border-border text-xs font-medium tracking-wide text-fg-3">
                       <th className="px-5 py-3 font-medium">NAME</th>
@@ -254,6 +255,7 @@ export function ApiKeysSection() {
                     ))}
                   </tbody>
                 </table>
+                </div>
                 <div className="flex items-center justify-between border-t border-border px-5 py-2.5 text-xs text-fg-3">
                   <span>
                     {keys.length} keys · {activeCount} active

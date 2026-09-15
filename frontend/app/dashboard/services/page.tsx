@@ -2,26 +2,38 @@ import { Bell, Link2, type LucideIcon } from 'lucide-react';
 import { API_URL } from '@/lib/api';
 import { CodeBlock } from './curl-example';
 
+interface Endpoint {
+  method: string;
+  path: string;
+  description: string;
+}
+
 interface ServiceInfo {
   name: string;
   description: string;
-  method: string;
-  path: string;
   status: 'Generally available' | 'Planned';
   icon: LucideIcon;
-  /** curl command and example response, shown once GA. Omitted for planned services. */
+  /** Every route this service exposes. The first entry is the primary one shown with a full example below. */
+  endpoints: [Endpoint, ...Endpoint[]];
+  /** curl command and example response for the primary endpoint, shown once GA. Omitted for planned services. */
   example?: { curl: string; response: string };
 }
 
-// Mirrors the actual state of src/ — only list a service once its module exists.
+// Mirrors the actual state of src/ — only list a service once its module exists,
+// and keep its endpoint list in sync with docs/API.md when routes are added.
 const SERVICES: ServiceInfo[] = [
   {
     name: 'URL shortener',
     description: 'Create, resolve and expire short links. Click counts included.',
-    method: 'POST',
-    path: '/api/v1/short-url/shorten',
     status: 'Generally available',
     icon: Link2,
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/api/v1/short-url/shorten',
+        description: 'Create a short link',
+      },
+    ],
     example: {
       curl: `curl -X POST ${API_URL}/api/v1/short-url/shorten \\
   -H "x-api-key: YOUR_API_KEY" \\
@@ -37,18 +49,57 @@ const SERVICES: ServiceInfo[] = [
   },
   {
     name: 'Notifications',
-    description: 'Queued email delivery via Resend, with automatic retries.',
-    method: 'POST',
-    path: '/api/v1/notifications/email',
+    description:
+      'Durable, queued email delivery via Resend — jobs can be tracked, retried, or cancelled after they’re created.',
     status: 'Generally available',
     icon: Bell,
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/api/v1/notifications/email',
+        description: 'Queue a one-off email',
+      },
+      {
+        method: 'GET',
+        path: '/api/v1/notifications/email/templates',
+        description: 'List predefined templates',
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/notifications/email/templates/:templateKey/send',
+        description: 'Render and queue a templated email',
+      },
+      {
+        method: 'GET',
+        path: '/api/v1/notifications/email/:jobId',
+        description: "Check a job's status",
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/notifications/email/:jobId/retry',
+        description: 'Retry a failed job',
+      },
+      {
+        method: 'DELETE',
+        path: '/api/v1/notifications/email/:jobId',
+        description: "Cancel a job that hasn't started processing",
+      },
+    ],
     example: {
       curl: `curl -X POST ${API_URL}/api/v1/notifications/email \\
   -H "x-api-key: YOUR_API_KEY" \\
   -H "Content-Type: application/json" \\
   -d '{"to": ["user@example.com"], "subject": "Hello", "body": "Message body"}'`,
       response: `{
-  "queued": true
+  "id": "9c1e...-uuid",
+  "status": "QUEUED",
+  "to": ["user@example.com"],
+  "subject": "Hello",
+  "error": null,
+  "attemptsMade": 0,
+  "resendId": null,
+  "createdAt": "2026-09-15T12:00:00.000Z",
+  "updatedAt": "2026-09-15T12:00:00.000Z"
 }`,
     },
   },
@@ -99,8 +150,23 @@ export default function ServicesPage() {
               <p className="mt-1 text-sm text-fg-2">{service.description}</p>
             </div>
             <span className="font-mono text-xs text-fg-3">
-              {service.method} {service.path}
+              {service.endpoints[0].method} {service.endpoints[0].path}
             </span>
+            {service.endpoints.length > 1 && (
+              <ul className="flex flex-col gap-1 border-t border-border pt-3">
+                {service.endpoints.slice(1).map((endpoint) => (
+                  <li
+                    key={`${endpoint.method} ${endpoint.path}`}
+                    className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs"
+                  >
+                    <span className="font-mono text-fg-3">
+                      {endpoint.method} {endpoint.path}
+                    </span>
+                    <span className="text-fg-2">— {endpoint.description}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             {service.example && (
               <div className="flex flex-col gap-3 border-t border-border pt-3">
                 <CodeBlock

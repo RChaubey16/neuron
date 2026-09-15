@@ -8,6 +8,7 @@ import {
   activeKeyCounts,
   callsOnDate,
   dailyTotalsByService,
+  fillDateRange,
   filterByRange,
   mostUsedService,
   totalCalls,
@@ -149,7 +150,10 @@ export default function UsagePage() {
     [usageQuery.data, range],
   );
 
-  const dailyTotals = useMemo(() => dailyTotalsByService(rows), [rows]);
+  const dailyTotals = useMemo(
+    () => fillDateRange(dailyTotalsByService(rows), range),
+    [rows, range],
+  );
   const services = useMemo(
     () => [...new Set(rows.map((row) => row.service))].sort(),
     [rows],

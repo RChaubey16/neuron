@@ -34,7 +34,8 @@ one unified API.
 | `auth` | `GET /auth/google`, `GET /auth/google/callback` | Google OAuth → Nest-issued JWT |
 | `api-keys` | `POST/GET /api-keys`, `DELETE /api-keys/:id` | Create, list, revoke API keys |
 | `usage` | `GET /usage` | Per-service/day usage aggregates |
-| `short-url` | `POST /api/v1/short-url/shorten`, `GET /:code` | First production service; `GET /:code` is public by design |
+| `notifications` | `POST /api/v1/notifications/email`, `GET/POST/DELETE /api/v1/notifications/email/:jobId(/retry)`, `GET /api/v1/notifications/email/templates`, `POST /api/v1/notifications/email/templates/:templateKey/send` | Email via Resend, queued as a durable job (BullMQ + Redis) with status/retry/cancel; predefined templates render server-side with `{{variable}}` interpolation |
+| `short-url` | `POST /api/v1/short-url/shorten`, `GET /:code` | `GET /:code` is public by design |
 | `health` | `GET /health` | Liveness check, exempt from rate limiting |
 
 See [`docs/API.md`](docs/API.md) for full request/response details and a
@@ -71,7 +72,7 @@ pnpm run build
 - **Auth:** `passport-google-oauth20` + `@nestjs/jwt` (self-issued session JWTs)
 - **Validation:** `class-validator` / `class-transformer`
 - **Rate limiting:** `@nestjs/throttler`
-- **Queue (planned):** BullMQ + Redis
+- **Queue:** BullMQ + Redis (email notifications)
 - **Testing:** Jest (unit + e2e)
 - **Deployment:** Multi-stage Docker image
 

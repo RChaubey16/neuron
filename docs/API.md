@@ -39,7 +39,7 @@ credentials, checked by different guards, for different kinds of caller.
 | Credential | Nest-issued session JWT (self-hosted Google OAuth) | API key |
 | Header | `Authorization: Bearer <token>` | `x-api-key: <raw-key>` |
 | Guard | `JwtAuthGuard` | `ApiKeyGuard` |
-| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/notifications/email`, `POST /api/v1/short-url/shorten` |
+| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/notifications/email` + job/template routes (see [Endpoints](#endpoints)), `POST /api/v1/short-url/shorten` |
 
 ### Getting a session JWT (for dashboard routes, in Postman)
 
@@ -88,6 +88,15 @@ except:
 - `GET /health` — exempt, so uptime monitors/liveness probes are never
   throttled.
 - `POST /api/v1/notifications/email` — tighter: **10 requests / 60s**.
+- `POST /api/v1/notifications/email/templates/:templateKey/send` — tighter:
+  **10 requests / 60s**.
+- `POST /api/v1/notifications/email/:jobId/retry` — tighter: **10 requests /
+  60s**.
+- `DELETE /api/v1/notifications/email/:jobId` — tighter: **10 requests /
+  60s**.
+- `GET /api/v1/notifications/email/templates` — looser: **30 requests /
+  60s**.
+- `GET /api/v1/notifications/email/:jobId` — looser: **30 requests / 60s**.
 - `POST /api/v1/short-url/shorten` — tighter: **10 requests / 60s**.
 - `GET /:code` — looser: **60 requests / 60s**.
 
@@ -292,11 +301,16 @@ keys have no recorded usage yet.
 
 ### `POST /api/v1/notifications/email`
 
-Queues an email for delivery via Resend. **Fire-and-forget by design** —
-this returns as soon as the job is queued (BullMQ + Redis), not once the
-email actually sends. There's no status/lookup endpoint; check server logs
-if you need delivery confirmation. Every call is logged to `UsageLog` under
-the `email-notifications` service.
+Creates a durable email job and queues it for asynchronous delivery via
+Resend — returns as soon as the job is created (BullMQ + Redis), not once
+the email actually sends. Unlike plain fire-and-forget, the returned job can
+be tracked, retried, or cancelled via the endpoints below. Every call is
+logged to `UsageLog` under the `email-notifications` service.
+
+> **Breaking change:** this endpoint used to return `{ "queued": true }`
+> with no way to check on a send afterward. It now returns the created job
+> (see response below) so it can be looked up via `GET
+> /api/v1/notifications/email/:jobId`.
 
 **Auth:** `x-api-key: <raw-api-key>`
 
@@ -319,8 +333,21 @@ the `email-notifications` service.
 
 **Response — `202 Accepted`**
 ```json
-{ "queued": true }
+{
+  "id": "9c1e...-uuid",
+  "status": "QUEUED",
+  "to": ["recipient@example.com"],
+  "subject": "Your report is ready",
+  "error": null,
+  "attemptsMade": 0,
+  "resendId": null,
+  "createdAt": "2026-09-15T12:00:00.000Z",
+  "updatedAt": "2026-09-15T12:00:00.000Z"
+}
 ```
+(`body` is never included in a job response — it can be up to 100,000
+chars and isn't needed to check on a job. `status` is one of `QUEUED`,
+`PROCESSING`, `SENT`, `FAILED`, `CANCELLED`.)
 
 **Errors**
 | Status | When |
@@ -329,13 +356,210 @@ the `email-notifications` service.
 | `400 Bad Request` | `to` is empty/not emails/over 50 recipients, or `subject`/`body` is empty or over its max length |
 | `429 Too Many Requests` | Rate limit exceeded |
 
-A queued job retries up to 3 times (exponential backoff) if Resend rejects
-it or the send otherwise fails — this all happens after the `202` response,
-so it's invisible to the caller. Note: the Resend account backing this API
-may have no verified sending domain in dev/staging, in which case every send
-fails with a `validation_error`/403 logged server-side regardless of the
-request being well-formed — that's a Resend account configuration issue,
-not a bug in this endpoint.
+BullMQ retries the underlying send up to 3 times (exponential backoff) if
+Resend rejects it or the send otherwise fails — this all happens after the
+`202` response; poll `GET /api/v1/notifications/email/:jobId` for the
+outcome. Note: the Resend account backing this API may have no verified
+sending domain in dev/staging, in which case every send fails with a
+`validation_error`/403 (visible in the job's `error` field and server logs)
+regardless of the request being well-formed — that's a Resend account
+configuration issue, not a bug in this endpoint.
+
+---
+
+### `GET /api/v1/notifications/email/templates`
+
+Lists the predefined email templates available to
+`POST .../templates/:templateKey/send`, along with each one's required
+variables. Templates are code-defined
+(`src/notifications/templates/templates.ts`) — there is no way to create,
+edit, or delete one via the API.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Rate limit:** 30 requests / 60s
+
+**Response — `200 OK`**
+```json
+[
+  { "key": "welcome", "requiredVariables": ["name", "productName"] },
+  {
+    "key": "password-reset",
+    "requiredVariables": ["name", "resetUrl", "expiryMinutes"]
+  }
+]
+```
+Only the key and its required variables are exposed — a template's
+subject/body copy isn't part of the public contract, so it can change
+without breaking callers.
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+
+---
+
+### `POST /api/v1/notifications/email/templates/:templateKey/send`
+
+Renders a predefined template with the given variables and queues the
+result exactly like `POST /api/v1/notifications/email` — same durable job,
+same `GET .../:jobId` / retry / cancel endpoints, same `UsageLog` entry
+under `email-notifications`. Rendering happens once, at send time; the
+rendered subject/body are what get persisted on the job, not the template
+key or raw variables — so editing a template's source afterward can't
+retroactively change an already-queued job, and retrying replays the exact
+original rendering. Every variable value is HTML-escaped before
+substitution, so a value can't break the surrounding markup or inject a
+tag/script into the outgoing email.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Rate limit:** 10 requests / 60s (tighter than the global default)
+
+**Path params**
+| Param | Type | Notes |
+|---|---|---|
+| `templateKey` | string | One of the keys returned by `GET .../templates` |
+
+**Request body**
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `to` | string[] (email) | Yes | 1–50 recipients, each a valid email address |
+| `variables` | object | Yes | Must contain exactly the target template's `requiredVariables` — no more, no fewer — with every value a string |
+
+```json
+{
+  "to": ["recipient@example.com"],
+  "variables": { "name": "Ada", "productName": "Neuron" }
+}
+```
+
+**Response — `202 Accepted`** (same shape as `POST /email` above, with the
+rendered subject)
+```json
+{
+  "id": "9c1e...-uuid",
+  "status": "QUEUED",
+  "to": ["recipient@example.com"],
+  "subject": "Welcome to Neuron, Ada!",
+  "error": null,
+  "attemptsMade": 0,
+  "resendId": null,
+  "createdAt": "2026-09-15T12:00:00.000Z",
+  "updatedAt": "2026-09-15T12:00:00.000Z"
+}
+```
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `404 Not Found` | `templateKey` doesn't match a known template |
+| `400 Bad Request` | `to` is empty/not emails/over 50 recipients; or `variables` is missing a required key, has an unexpected extra key, or has a non-string value |
+| `429 Too Many Requests` | Rate limit exceeded |
+
+---
+
+### `GET /api/v1/notifications/email/:jobId`
+
+Looks up the current status of a previously queued email job, from either
+`POST /email` or a templated send.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Rate limit:** 30 requests / 60s
+
+**Path params**
+| Param | Type | Notes |
+|---|---|---|
+| `jobId` | string (uuid v4) | The `id` field from the job's create/retry response. Must be a well-formed UUID or the request is rejected before the database is queried. |
+
+**Response — `200 OK`** (same shape as the job returned by `POST /email`)
+```json
+{
+  "id": "9c1e...-uuid",
+  "status": "FAILED",
+  "to": ["recipient@example.com"],
+  "subject": "Your report is ready",
+  "error": "validation_error (403): You can only send testing emails to your own email address",
+  "attemptsMade": 3,
+  "resendId": null,
+  "createdAt": "2026-09-15T12:00:00.000Z",
+  "updatedAt": "2026-09-15T12:00:05.000Z"
+}
+```
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `400 Bad Request` | `jobId` isn't a valid UUID |
+| `404 Not Found` | No job with that id, or it isn't owned by the calling API key (the two cases are indistinguishable on purpose) |
+
+---
+
+### `POST /api/v1/notifications/email/:jobId/retry`
+
+Re-queues a job that's currently `FAILED`, replaying its originally stored
+`to`/`subject`/`body` and resetting `attemptsMade` to 0.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Rate limit:** 10 requests / 60s (tighter than the global default)
+
+**Path params**
+| Param | Type | Notes |
+|---|---|---|
+| `jobId` | string (uuid v4) | Same rules as `GET .../:jobId` above |
+
+**Response — `200 OK`** (the job, now back to `QUEUED`)
+```json
+{
+  "id": "9c1e...-uuid",
+  "status": "QUEUED",
+  "to": ["recipient@example.com"],
+  "subject": "Your report is ready",
+  "error": null,
+  "attemptsMade": 0,
+  "resendId": null,
+  "createdAt": "2026-09-15T12:00:00.000Z",
+  "updatedAt": "2026-09-15T12:00:10.000Z"
+}
+```
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `400 Bad Request` | `jobId` isn't a valid UUID |
+| `404 Not Found` | No job with that id, or it isn't owned by the calling API key |
+| `409 Conflict` | The job isn't currently `FAILED` (e.g. it's `QUEUED`, `SENT`, or already `CANCELLED`) |
+
+---
+
+### `DELETE /api/v1/notifications/email/:jobId`
+
+Cancels a job that hasn't started processing yet.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Rate limit:** 10 requests / 60s (tighter than the global default)
+
+**Path params**
+| Param | Type | Notes |
+|---|---|---|
+| `jobId` | string (uuid v4) | Same rules as `GET .../:jobId` above |
+
+**Response — `204 No Content`** (empty body)
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `400 Bad Request` | `jobId` isn't a valid UUID |
+| `404 Not Found` | No job with that id, or it isn't owned by the calling API key |
+| `409 Conflict` | The job is no longer `QUEUED` — e.g. a worker already picked it up, or it already reached a terminal state |
 
 ---
 
@@ -427,6 +651,7 @@ Recommended environment variables for a Postman collection:
 | `jwt` | `eyJhbGciOi...` | `token` fragment from `GET /auth/google`'s callback redirect |
 | `apiKey` | `nrn_ab12cd34...` | `POST /api-keys`'s `key` field, or the seed script |
 | `shortCode` | `UgFiSdm` | `POST /api/v1/short-url/shorten`'s `code` field |
+| `jobId` | `9c1e...-uuid` | `POST /api/v1/notifications/email`'s (or a templated send's) `id` field |
 
 Then:
 - Dashboard requests: `{{baseUrl}}/me`, header `Authorization: Bearer {{jwt}}`
@@ -443,9 +668,18 @@ Then:
 6. `POST /api/v1/short-url/shorten` with `{{apiKey}}` — copy the `code` field into
    `{{shortCode}}`.
 7. `GET /{{shortCode}}` — confirm the redirect.
-8. `POST /api/v1/notifications/email` with `{{apiKey}}` — confirm `202
-   { "queued": true }`.
-9. `GET /usage` with `{{jwt}}` — confirm `url-shortener` and
-   `email-notifications` rows now each show a count of at least 1.
-10. `DELETE /api-keys/:id` — revoke the key, then repeat step 6 (or step 8)
+8. `POST /api/v1/notifications/email` with `{{apiKey}}` — confirm `202` with
+   a `QUEUED` job body, and copy its `id` into `{{jobId}}`.
+9. `GET /api/v1/notifications/email/{{jobId}}` — confirm it reflects the
+   job's current status (it may already be `SENT`/`FAILED` by the time you
+   check).
+10. `GET /api/v1/notifications/email/templates` — confirm both `welcome`
+    and `password-reset` are listed.
+11. `POST /api/v1/notifications/email/templates/welcome/send` with
+    `{"to": ["recipient@example.com"], "variables": {"name": "Ada",
+    "productName": "Neuron"}}` — confirm `202` with the rendered subject
+    `"Welcome to Neuron, Ada!"`.
+12. `GET /usage` with `{{jwt}}` — confirm `url-shortener` and
+    `email-notifications` rows now each show a count of at least 1.
+13. `DELETE /api-keys/:id` — revoke the key, then repeat step 6 (or step 8)
     and confirm it now returns `401`.

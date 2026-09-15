@@ -4,6 +4,7 @@ import {
   activeKeyCounts,
   callsOnDate,
   dailyTotalsByService,
+  fillDateRange,
   filterByRange,
   mostUsedService,
   totalCalls,
@@ -103,5 +104,54 @@ describe('dailyTotalsByService', () => {
       { date: '2026-09-01', totals: { 'url-shortener': 4, notifications: 5 } },
       { date: '2026-09-02', totals: { 'url-shortener': 2 } },
     ]);
+  });
+});
+
+describe('fillDateRange', () => {
+  it('produces one entry per day across the full range, oldest first', () => {
+    const today = new Date('2026-09-10T00:00:00.000Z');
+    const result = fillDateRange([], 7, today);
+
+    expect(result.map((r) => r.date)).toEqual([
+      '2026-09-04',
+      '2026-09-05',
+      '2026-09-06',
+      '2026-09-07',
+      '2026-09-08',
+      '2026-09-09',
+      '2026-09-10',
+    ]);
+    expect(result.every((r) => Object.keys(r.totals).length === 0)).toBe(true);
+  });
+
+  it('keeps existing per-service totals on days that have data and fills gaps with an empty total', () => {
+    const today = new Date('2026-09-10T00:00:00.000Z');
+    const totals = [{ date: '2026-09-08', totals: { 'url-shortener': 5 } }];
+
+    const result = fillDateRange(totals, 7, today);
+
+    expect(result).toEqual([
+      { date: '2026-09-04', totals: {} },
+      { date: '2026-09-05', totals: {} },
+      { date: '2026-09-06', totals: {} },
+      { date: '2026-09-07', totals: {} },
+      { date: '2026-09-08', totals: { 'url-shortener': 5 } },
+      { date: '2026-09-09', totals: {} },
+      { date: '2026-09-10', totals: {} },
+    ]);
+  });
+
+  it('does not collapse a single day of usage to the center of the range', () => {
+    // Regression: a chart driven straight off dailyTotalsByService's sparse
+    // output would see length === 1 and render one dot centered in an
+    // otherwise-blank canvas instead of placing it within the full window.
+    const totals = [{ date: '2026-09-02', totals: { notifications: 6 } }];
+
+    const result = fillDateRange(totals, 30, new Date('2026-09-15T00:00:00.000Z'));
+
+    expect(result).toHaveLength(30);
+    expect(result.find((r) => r.date === '2026-09-02')?.totals).toEqual({
+      notifications: 6,
+    });
   });
 });

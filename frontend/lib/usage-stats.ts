@@ -70,3 +70,30 @@ export function dailyTotalsByService(rows: UsageSummary[]): DailyServiceTotals[]
     .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
     .map(([date, totals]) => ({ date, totals }));
 }
+
+/**
+ * Expands `totals` (which only has an entry for days with recorded usage)
+ * into exactly one entry per day across the last `days` days, filling gaps
+ * with an empty per-service total.
+ *
+ * Without this, a time-series chart driven directly by `dailyTotalsByService`
+ * degenerates when usage is clustered on one or two days within the window —
+ * e.g. a single entry renders as one dot centered in an otherwise-empty
+ * chart instead of a point correctly placed within the full date range.
+ */
+export function fillDateRange(
+  totals: DailyServiceTotals[],
+  days: RangeDays,
+  today: Date = new Date(),
+): DailyServiceTotals[] {
+  const byDate = new Map(totals.map((t) => [t.date, t.totals]));
+  const cutoff = new Date(today);
+  cutoff.setUTCDate(cutoff.getUTCDate() - (days - 1));
+
+  return Array.from({ length: days }, (_, i) => {
+    const day = new Date(cutoff);
+    day.setUTCDate(day.getUTCDate() + i);
+    const date = day.toISOString().slice(0, 10);
+    return { date, totals: byDate.get(date) ?? {} };
+  });
+}
