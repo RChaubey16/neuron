@@ -1,4 +1,8 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsService } from './notifications.service';
@@ -82,6 +86,80 @@ describe('NotificationsService', () => {
       });
       expect(result.id).toBe('job-1');
       expect(result.status).toBe('QUEUED');
+    });
+  });
+
+  describe('sendTemplatedEmail', () => {
+    it("renders a known template and queues it under the created row's own id", async () => {
+      prisma.emailJob.create.mockResolvedValue({
+        ...job,
+        subject: 'Welcome to Neuron, Ada!',
+        body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+      });
+      queue.add.mockResolvedValue({});
+
+      const result = await service.sendTemplatedEmail('key-1', 'welcome', {
+        to: ['recipient@example.com'],
+        variables: { name: 'Ada', productName: 'Neuron' },
+      });
+
+      expect(prisma.emailJob.create).toHaveBeenCalledWith({
+        data: {
+          apiKeyId: 'key-1',
+          to: ['recipient@example.com'],
+          subject: 'Welcome to Neuron, Ada!',
+          body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+        },
+      });
+      expect(queue.add).toHaveBeenCalledWith(
+        'send',
+        {
+          to: ['recipient@example.com'],
+          subject: 'Welcome to Neuron, Ada!',
+          body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+        },
+        expect.objectContaining({ jobId: job.id }),
+      );
+      expect(result.status).toBe('QUEUED');
+    });
+
+    it('throws NotFoundException for an unknown template key', async () => {
+      await expect(
+        service.sendTemplatedEmail('key-1', 'does-not-exist', {
+          to: ['recipient@example.com'],
+          variables: {},
+        }),
+      ).rejects.toThrow(NotFoundException);
+      expect(prisma.emailJob.create).not.toHaveBeenCalled();
+    });
+
+    it('throws BadRequestException when variables do not match the template', async () => {
+      await expect(
+        service.sendTemplatedEmail('key-1', 'welcome', {
+          to: ['recipient@example.com'],
+          variables: { name: 'Ada' },
+        }),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.emailJob.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('listTemplates', () => {
+    it('lists every registered template with its required variables', () => {
+      const result = service.listTemplates();
+
+      expect(result).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'welcome',
+            requiredVariables: ['name', 'productName'],
+          }),
+          expect.objectContaining({
+            key: 'password-reset',
+            requiredVariables: ['name', 'resetUrl', 'expiryMinutes'],
+          }),
+        ]),
+      );
     });
   });
 

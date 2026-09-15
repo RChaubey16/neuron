@@ -8,6 +8,10 @@ import { Queue } from 'bullmq';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmailDto } from './dto/create-email.dto';
 import { EmailJobResponseDto } from './dto/email-job-response.dto';
+import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
+import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
+import { EMAIL_TEMPLATES } from './templates/templates';
+import { renderTemplate } from './templates/render-template';
 import type { EmailJob } from '../../generated/prisma';
 
 @Injectable()
@@ -36,13 +40,49 @@ export class NotificationsService {
     apiKeyId: string,
     dto: CreateEmailDto,
   ): Promise<EmailJobResponseDto> {
-    const job = await this.prisma.emailJob.create({
-      data: { apiKeyId, to: dto.to, subject: dto.subject, body: dto.body },
-    });
+    return this.createAndQueueJob(apiKeyId, dto);
+  }
 
-    await this.emailQueue.add('send', dto, this.jobOptions(job.id));
+  /**
+   * Renders a predefined template with the given variables and queues the
+   * result exactly like queueEmail.
+   * Throws a NotFoundException if templateKey doesn't match a known
+   * template (see `src/notifications/templates/templates.ts`).
+   * Throws a BadRequestException (via renderTemplate) if `variables`
+   * doesn't exactly match the template's required variables.
+   * The rendered subject/body are persisted on the EmailJob row itself,
+   * not the template key + raw variables — so status/retry/EmailProcessor
+   * need no template-awareness, and editing a template's source later
+   * can't retroactively change an already-queued job's content.
+   *
+   * @param apiKeyId - Id of the ApiKey making the request, for ownership
+   * @param templateKey - Key of the template to render, from EMAIL_TEMPLATES
+   * @param dto - Recipients and template variable values
+   * @returns The created job's current state
+   */
+  async sendTemplatedEmail(
+    apiKeyId: string,
+    templateKey: string,
+    dto: SendTemplatedEmailDto,
+  ): Promise<EmailJobResponseDto> {
+    const template = EMAIL_TEMPLATES[templateKey];
+    if (!template) {
+      throw new NotFoundException(`Unknown email template '${templateKey}'`);
+    }
 
-    return this.toResponseDto(job);
+    const { subject, body } = renderTemplate(template, dto.variables);
+    return this.createAndQueueJob(apiKeyId, { to: dto.to, subject, body });
+  }
+
+  /** Lists the available email templates and the variables each one requires, without exposing their subject/body copy. */
+  listTemplates(): EmailTemplateSummaryDto[] {
+    return Object.entries(EMAIL_TEMPLATES).map(
+      ([key, template]) =>
+        new EmailTemplateSummaryDto({
+          key,
+          requiredVariables: template.requiredVariables,
+        }),
+    );
   }
 
   /**
@@ -127,6 +167,29 @@ export class NotificationsService {
       where: { id: jobId, status: 'QUEUED' },
       data: { status: 'CANCELLED' },
     });
+  }
+
+  /**
+   * Creates the durable EmailJob record and queues it for delivery, shared
+   * by both a direct send (queueEmail) and a templated send
+   * (sendTemplatedEmail) so the two entry points can never drift apart.
+   */
+  private async createAndQueueJob(
+    apiKeyId: string,
+    email: { to: string[]; subject: string; body: string },
+  ): Promise<EmailJobResponseDto> {
+    const job = await this.prisma.emailJob.create({
+      data: {
+        apiKeyId,
+        to: email.to,
+        subject: email.subject,
+        body: email.body,
+      },
+    });
+
+    await this.emailQueue.add('send', email, this.jobOptions(job.id));
+
+    return this.toResponseDto(job);
   }
 
   /**

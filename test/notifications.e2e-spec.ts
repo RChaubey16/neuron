@@ -143,6 +143,77 @@ describe('Notifications (e2e)', () => {
     });
   });
 
+  describe('GET /api/v1/notifications/email/templates', () => {
+    it('lists the available templates with their required variables', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/notifications/email/templates')
+        .set('x-api-key', 'nrn_validkeymaterial')
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'welcome',
+            requiredVariables: ['name', 'productName'],
+          }),
+        ]),
+      );
+    });
+  });
+
+  describe('POST /api/v1/notifications/email/templates/:templateKey/send', () => {
+    it('renders the template and queues a durable EmailJob', async () => {
+      prismaMock.emailJob.create.mockResolvedValue({
+        ...baseJob,
+        subject: 'Welcome to Neuron, Ada!',
+        status: 'QUEUED',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/notifications/email/templates/welcome/send')
+        .set('x-api-key', 'nrn_validkeymaterial')
+        .send({
+          to: ['recipient@example.com'],
+          variables: { name: 'Ada', productName: 'Neuron' },
+        })
+        .expect(202);
+
+      expect(response.body).toMatchObject({
+        id: 'job-1',
+        status: 'QUEUED',
+        subject: 'Welcome to Neuron, Ada!',
+      });
+      expect(prismaMock.emailJob.create).toHaveBeenCalledWith({
+        data: {
+          apiKeyId: 'key-1',
+          to: ['recipient@example.com'],
+          subject: 'Welcome to Neuron, Ada!',
+          body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+        },
+      });
+    });
+
+    it('returns 404 for an unknown template key', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/notifications/email/templates/does-not-exist/send')
+        .set('x-api-key', 'nrn_validkeymaterial')
+        .send({ to: ['recipient@example.com'], variables: {} })
+        .expect(404);
+
+      expect(prismaMock.emailJob.create).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when required template variables are missing', async () => {
+      await request(app.getHttpServer())
+        .post('/api/v1/notifications/email/templates/welcome/send')
+        .set('x-api-key', 'nrn_validkeymaterial')
+        .send({ to: ['recipient@example.com'], variables: { name: 'Ada' } })
+        .expect(400);
+
+      expect(prismaMock.emailJob.create).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /api/v1/notifications/email/:jobId', () => {
     const jobId = '33333333-3333-4333-8333-333333333333';
 
