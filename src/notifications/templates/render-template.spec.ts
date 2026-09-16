@@ -21,18 +21,24 @@ describe('renderTemplate', () => {
     });
   });
 
-  it('HTML-escapes substituted values so they cannot break the markup or inject a tag', () => {
+  it('HTML-escapes substituted values in the body so they cannot break the markup or inject a tag', () => {
     const result = renderTemplate(definition, {
       name: '<script>alert(1)</script>',
       productName: 'A & B "quoted"',
     });
 
-    expect(result.subject).toBe(
-      'Welcome, &lt;script&gt;alert(1)&lt;/script&gt;!',
-    );
     expect(result.body).toBe(
       '<p>Hi &lt;script&gt;alert(1)&lt;/script&gt;, enjoy A &amp; B &quot;quoted&quot;.</p>',
     );
+  });
+
+  it('does not HTML-escape the subject, since it is sent as a plain mail header, not HTML', () => {
+    const result = renderTemplate(definition, {
+      name: 'A & B "quoted"',
+      productName: 'Neuron',
+    });
+
+    expect(result.subject).toBe('Welcome, A & B "quoted"!');
   });
 
   it('throws BadRequestException when a required variable is missing', () => {
@@ -58,5 +64,40 @@ describe('renderTemplate', () => {
         productName: 42 as unknown as string,
       }),
     ).toThrow(BadRequestException);
+  });
+
+  describe('urlVariables', () => {
+    const urlDefinition: EmailTemplateDefinition = {
+      subject: 'Reset your password',
+      body: '<p><a href="{{resetUrl}}">Reset password</a></p>',
+      requiredVariables: ['resetUrl'],
+      urlVariables: ['resetUrl'],
+    };
+
+    it('accepts a valid http(s) URL', () => {
+      const result = renderTemplate(urlDefinition, {
+        resetUrl: 'https://neuron.ruturaj.xyz/reset?token=abc',
+      });
+
+      expect(result.body).toBe(
+        '<p><a href="https://neuron.ruturaj.xyz/reset?token=abc">Reset password</a></p>',
+      );
+    });
+
+    it('throws BadRequestException for a non-http(s) URL scheme (e.g. javascript:)', () => {
+      expect(() =>
+        renderTemplate(urlDefinition, {
+          resetUrl: 'javascript:alert(1)',
+        }),
+      ).toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException for a value that is not a URL at all', () => {
+      expect(() =>
+        renderTemplate(urlDefinition, {
+          resetUrl: 'not a url',
+        }),
+      ).toThrow(BadRequestException);
+    });
   });
 });

@@ -1,6 +1,6 @@
 import { Expose } from 'class-transformer';
 
-/** Shape of a `ShortUrl` as returned by `POST /shorten` — no full absolute short link, since no public base URL is configured until deployment (Phase 8). */
+/** Shape of a `ShortUrl` as returned by `POST /shorten` — no full absolute short link, since no public base URL env var is wired in yet (the app is deployed at neuron-api.ruturaj.xyz as of Phase 8, but nothing in this service reads that as config); callers must build the link themselves. */
 export class ShortUrlResponseDto {
   @Expose()
   code: string;
