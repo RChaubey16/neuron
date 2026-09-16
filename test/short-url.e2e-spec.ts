@@ -12,7 +12,7 @@ describe('ShortUrl (e2e)', () => {
   const dashboardUser = { id: 'user-1', email: 'user@example.com' };
   const prismaMock = {
     user: { findUniqueOrThrow: jest.fn() },
-    apiKey: { findFirst: jest.fn(), update: jest.fn() },
+    apiKey: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     usageLog: { create: jest.fn() },
     shortUrl: {
       create: jest.fn(),
@@ -208,6 +208,53 @@ describe('ShortUrl (e2e)', () => {
 
   it('rejects GET /short-url with no Authorization header', () => {
     return request(app.getHttpServer()).get('/short-url').expect(401);
+  });
+
+  it('shortens a URL from the dashboard via the hidden system key, and reuses it on a second call', async () => {
+    const systemKey = {
+      id: 'system-key-1',
+      userId: dashboardUser.id,
+      isSystemKey: true,
+    };
+    prismaMock.apiKey.findFirst.mockResolvedValue(systemKey);
+    prismaMock.shortUrl.create.mockImplementation(
+      ({ data }: { data: Record<string, unknown> }) =>
+        Promise.resolve({
+          id: 'short-1',
+          createdAt: new Date('2026-09-16T00:00:00Z'),
+          clickCount: 0,
+          ...data,
+        }),
+    );
+
+    const response = await request(app.getHttpServer())
+      .post('/short-url')
+      .set('Authorization', 'Bearer valid-token')
+      .send({ originalUrl: 'https://example.com/from-dashboard' })
+      .expect(201);
+
+    const body = response.body as { code: string; originalUrl: string };
+    expect(body.originalUrl).toBe('https://example.com/from-dashboard');
+    expect(prismaMock.apiKey.findFirst).toHaveBeenCalledWith({
+      where: { userId: dashboardUser.id, isSystemKey: true },
+    });
+    expect(prismaMock.apiKey.create).not.toHaveBeenCalled();
+    expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
+      data: {
+        apiKeyId: 'system-key-1',
+        service: 'url-shortener',
+        endpoint: '/short-url',
+      },
+    });
+  });
+
+  it('rejects POST /short-url with no Authorization header, without touching the DB', async () => {
+    await request(app.getHttpServer())
+      .post('/short-url')
+      .send({ originalUrl: 'https://example.com' })
+      .expect(401);
+
+    expect(prismaMock.shortUrl.create).not.toHaveBeenCalled();
   });
 
   it('redirects GET /:code to the original URL and increments clickCount', async () => {

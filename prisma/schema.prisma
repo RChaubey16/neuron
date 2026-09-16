@@ -25,14 +25,15 @@ model User {
 /// Only the hash of a generated key is ever stored — the raw key is returned
 /// once at creation time and never persisted or logged.
 model ApiKey {
-  id         String    @id @default(uuid())
-  userId     String
-  hashedKey  String    @unique
-  keyPrefix  String
-  name       String?
-  createdAt  DateTime  @default(now())
-  lastUsedAt DateTime?
-  revokedAt  DateTime?
+  id          String    @id @default(uuid())
+  userId      String
+  hashedKey   String    @unique
+  keyPrefix   String
+  name        String?
+  isSystemKey Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  lastUsedAt  DateTime?
+  revokedAt   DateTime?
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageLogs UsageLog[]

@@ -1,13 +1,59 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { API_URL, api, type ShortUrl } from '@/lib/api';
-import { Check, Copy, Link2, RefreshCw, TriangleAlert } from 'lucide-react';
+import { Check, Copy, Link2, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
 
 const PAGE_SIZE = 20;
 // Mirrors the backend's MAX_LIST_LIMIT (src/short-url/dto/list-short-urls-query.dto.ts).
 const MAX_LIMIT = 100;
+
+function ShortenUrlForm() {
+  const queryClient = useQueryClient();
+  const [originalUrl, setOriginalUrl] = useState('');
+
+  const createMutation = useMutation({
+    mutationFn: () => api.createShortUrl(originalUrl),
+    onSuccess: () => {
+      setOriginalUrl('');
+      // Prefix match: invalidates every `['short-urls', limit]` query, not
+      // just the current page size.
+      void queryClient.invalidateQueries({ queryKey: ['short-urls'] });
+    },
+  });
+
+  return (
+    <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
+      <label className="text-xs font-medium text-fg-2">Shorten a URL</label>
+      <form
+        className="flex min-w-0 gap-2"
+        onSubmit={(e) => {
+          e.preventDefault();
+          createMutation.mutate();
+        }}
+      >
+        <input
+          value={originalUrl}
+          onChange={(e) => setOriginalUrl(e.target.value)}
+          placeholder="https://example.com/a/long/path"
+          className="min-w-0 flex-1 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={createMutation.isPending}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-[inset_0_-1px_0_rgba(16,24,40,0.15)] hover:bg-accent-hover disabled:opacity-50"
+        >
+          <Plus className="h-4 w-4" />
+          {createMutation.isPending ? 'Shortening…' : 'Shorten'}
+        </button>
+      </form>
+      {createMutation.isError && (
+        <p className="text-sm text-danger">Failed to shorten URL.</p>
+      )}
+    </div>
+  );
+}
 
 function CopyLinkButton({ code }: { code: string }) {
   const [copied, setCopied] = useState(false);
@@ -98,6 +144,8 @@ export default function UrlsPage() {
           Every link shortened by any of your API keys.
         </p>
       </div>
+
+      <ShortenUrlForm />
 
       {isLoading && (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">

@@ -1,6 +1,7 @@
 import { createHash } from 'crypto';
 import { NotFoundException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Prisma } from '../../generated/prisma';
 import { ApiKeyService } from './api-keys.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -83,7 +84,7 @@ describe('ApiKeyService', () => {
       const result = await service.findAllForUser('user-1');
 
       expect(prisma.apiKey.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
+        where: { userId: 'user-1', isSystemKey: false },
         orderBy: { createdAt: 'desc' },
       });
       expect(result).toEqual([
@@ -112,7 +113,12 @@ describe('ApiKeyService', () => {
       await service.revoke('user-1', 'key-1');
 
       expect(prisma.apiKey.findFirst).toHaveBeenCalledWith({
-        where: { id: 'key-1', userId: 'user-1', revokedAt: null },
+        where: {
+          id: 'key-1',
+          userId: 'user-1',
+          isSystemKey: false,
+          revokedAt: null,
+        },
       });
       expect(prisma.apiKey.update).toHaveBeenCalledTimes(1);
       const [updateArgs] = prisma.apiKey.update.mock.calls[0] as [
@@ -129,6 +135,90 @@ describe('ApiKeyService', () => {
         NotFoundException,
       );
       expect(prisma.apiKey.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('getOrCreateSystemKey', () => {
+    it("returns the user's existing system key without creating one", async () => {
+      const existing = {
+        id: 'system-key-1',
+        userId: 'user-1',
+        isSystemKey: true,
+      };
+      prisma.apiKey.findFirst.mockResolvedValue(existing);
+
+      const result = await service.getOrCreateSystemKey('user-1');
+
+      expect(prisma.apiKey.findFirst).toHaveBeenCalledWith({
+        where: { userId: 'user-1', isSystemKey: true },
+      });
+      expect(prisma.apiKey.create).not.toHaveBeenCalled();
+      expect(result).toBe(existing);
+    });
+
+    it('creates a system key on first use, hashing key material never returned to any caller', async () => {
+      prisma.apiKey.findFirst.mockResolvedValue(null);
+      prisma.apiKey.create.mockImplementation(
+        ({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'system-key-1',
+            createdAt: new Date('2026-09-16T00:00:00Z'),
+            lastUsedAt: null,
+            revokedAt: null,
+            ...data,
+          }),
+      );
+
+      const result = await service.getOrCreateSystemKey('user-1');
+
+      expect(prisma.apiKey.create).toHaveBeenCalledTimes(1);
+      const [createArgs] = prisma.apiKey.create.mock.calls[0] as [
+        {
+          data: {
+            userId: string;
+            hashedKey: string;
+            keyPrefix: string;
+            name: string;
+            isSystemKey: boolean;
+          };
+        },
+      ];
+      expect(createArgs.data.userId).toBe('user-1');
+      expect(createArgs.data.name).toBe('Dashboard');
+      expect(createArgs.data.isSystemKey).toBe(true);
+      expect(typeof createArgs.data.hashedKey).toBe('string');
+      expect(typeof createArgs.data.keyPrefix).toBe('string');
+      expect(result).not.toHaveProperty('key');
+    });
+
+    it('refetches instead of throwing when a concurrent request wins the create race', async () => {
+      const winner = {
+        id: 'system-key-1',
+        userId: 'user-1',
+        isSystemKey: true,
+      };
+      prisma.apiKey.findFirst
+        .mockResolvedValueOnce(null) // initial lookup: none yet
+        .mockResolvedValueOnce(winner); // refetch after losing the race
+      const p2002 = new Prisma.PrismaClientKnownRequestError(
+        'Unique constraint failed',
+        { code: 'P2002', clientVersion: '7.0.0' },
+      );
+      prisma.apiKey.create.mockRejectedValue(p2002);
+
+      const result = await service.getOrCreateSystemKey('user-1');
+
+      expect(prisma.apiKey.findFirst).toHaveBeenCalledTimes(2);
+      expect(result).toBe(winner);
+    });
+
+    it('rethrows a non-P2002 error from key creation', async () => {
+      prisma.apiKey.findFirst.mockResolvedValue(null);
+      prisma.apiKey.create.mockRejectedValue(new Error('connection reset'));
+
+      await expect(service.getOrCreateSystemKey('user-1')).rejects.toThrow(
+        'connection reset',
+      );
     });
   });
 });

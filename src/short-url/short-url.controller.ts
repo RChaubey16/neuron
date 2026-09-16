@@ -13,6 +13,7 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
+import { DashboardApiKeyGuard } from '../api-keys/guards/dashboard-api-key.guard';
 import { CurrentApiKey } from '../api-keys/decorators/current-api-key.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -58,9 +59,9 @@ export class ShortUrlController {
     );
   }
 
-  // Dashboard route (JwtAuthGuard, unversioned) — must stay declared before
+  // Dashboard routes (JwtAuthGuard, unversioned) — must stay declared before
   // the GET ':code' catch-all below, or that single-segment param route
-  // would swallow it as `code = "short-url"` (see that handler's comment).
+  // would swallow them as `code = "short-url"` (see that handler's comment).
   @Get('short-url')
   @UseGuards(JwtAuthGuard)
   findAllForUser(
@@ -72,6 +73,23 @@ export class ShortUrlController {
       query.limit,
       query.offset,
     );
+  }
+
+  // Dashboard-native counterpart to POST /api/v1/short-url/shorten: bridges
+  // a logged-in human's session JWT to the same ApiKeyId-scoped service
+  // method via DashboardApiKeyGuard's hidden per-user system key, so a
+  // dashboard-created link lands in the exact same tables/usage log as a
+  // machine-created one (see docs/2026-09-16-dashboard-service-usage-design.md).
+  @Post('short-url')
+  @HttpCode(HttpStatus.CREATED)
+  @UseGuards(JwtAuthGuard, DashboardApiKeyGuard)
+  @Service('url-shortener')
+  @UseInterceptors(UsageLoggingInterceptor)
+  createFromDashboard(
+    @CurrentApiKey() apiKey: ApiKey,
+    @Body() dto: CreateShortUrlDto,
+  ): Promise<ShortUrlResponseDto> {
+    return this.shortUrlService.create(apiKey.id, dto);
   }
 
   // Unauthenticated by design — meant to be hit directly by browsers.

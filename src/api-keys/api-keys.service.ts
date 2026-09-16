@@ -4,9 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateApiKeyDto } from './dto/create-api-key.dto';
 import { ApiKeyResponseDto } from './dto/api-key-response.dto';
 import { CreatedApiKeyResponseDto } from './dto/created-api-key-response.dto';
+import { Prisma, ApiKey } from '../../generated/prisma';
 
 const KEY_PREFIX = 'nrn_';
 const KEY_PREFIX_DISPLAY_LENGTH = 12;
+const SYSTEM_KEY_NAME = 'Dashboard';
 
 @Injectable()
 export class ApiKeyService {
@@ -53,7 +55,7 @@ export class ApiKeyService {
    */
   async findAllForUser(userId: string): Promise<ApiKeyResponseDto[]> {
     const apiKeys = await this.prisma.apiKey.findMany({
-      where: { userId },
+      where: { userId, isSystemKey: false },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -63,14 +65,15 @@ export class ApiKeyService {
   /**
    * Revokes (soft-deletes) one of the caller's own API keys.
    * Throws a NotFoundException if the key doesn't exist, isn't owned by the
-   * caller, or is already revoked.
+   * caller, is already revoked, or is the hidden dashboard system key (see
+   * `getOrCreateSystemKey`) — that key can never be revoked through the API.
    *
    * @param userId - Id of the caller, to scope the lookup to their own keys
    * @param id - Id of the `ApiKey` to revoke
    */
   async revoke(userId: string, id: string): Promise<void> {
     const apiKey = await this.prisma.apiKey.findFirst({
-      where: { id, userId, revokedAt: null },
+      where: { id, userId, isSystemKey: false, revokedAt: null },
     });
     if (!apiKey) {
       throw new NotFoundException('API key not found');
@@ -80,5 +83,61 @@ export class ApiKeyService {
       where: { id },
       data: { revokedAt: new Date() },
     });
+  }
+
+  /**
+   * Resolves the hidden "system" API key representing actions a user takes
+   * directly from the dashboard (as opposed to via a machine-held key),
+   * lazily creating one on first use. This bridges `JwtAuthGuard`'s
+   * human/session auth to service methods that are all scoped by
+   * `apiKeyId`, so dashboard-originated calls flow through the exact same
+   * code path (`@CurrentApiKey()`, `UsageLoggingInterceptor`) as a real
+   * machine-held key with zero changes to either.
+   *
+   * @param userId - Id of the dashboard user
+   * @returns The user's system `ApiKey` row (never containing a usable raw
+   *   key — the generated key material only exists to satisfy the
+   *   `hashedKey`/`keyPrefix` columns and is discarded immediately)
+   */
+  async getOrCreateSystemKey(userId: string): Promise<ApiKey> {
+    const existing = await this.prisma.apiKey.findFirst({
+      where: { userId, isSystemKey: true },
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const key = `${KEY_PREFIX}${randomBytes(32).toString('base64url')}`;
+    const keyPrefix = key.slice(0, KEY_PREFIX_DISPLAY_LENGTH);
+    const hashedKey = createHash('sha256').update(key).digest('hex');
+
+    try {
+      return await this.prisma.apiKey.create({
+        data: {
+          userId,
+          hashedKey,
+          keyPrefix,
+          name: SYSTEM_KEY_NAME,
+          isSystemKey: true,
+        },
+      });
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2002'
+      ) {
+        // Lost a concurrent race against another request creating this same
+        // user's system key (guarded by the partial unique index on
+        // `(userId) WHERE isSystemKey = true`) — return what the winner
+        // created instead of throwing.
+        const winner = await this.prisma.apiKey.findFirst({
+          where: { userId, isSystemKey: true },
+        });
+        if (winner) {
+          return winner;
+        }
+      }
+      throw error;
+    }
   }
 }

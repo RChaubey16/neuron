@@ -103,6 +103,12 @@ export const api = {
     const qs = query.toString();
     return apiFetch<ShortUrlList>(`/short-url${qs ? `?${qs}` : ''}`);
   },
+
+  createShortUrl: (originalUrl: string) =>
+    apiFetch<ShortUrl>('/short-url', {
+      method: 'POST',
+      body: JSON.stringify({ originalUrl }),
+    }),
 };
 
 export function googleSignInUrl(): string {

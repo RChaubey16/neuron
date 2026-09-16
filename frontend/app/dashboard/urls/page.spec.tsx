@@ -7,7 +7,10 @@ import { api, type ShortUrlList } from '@/lib/api';
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
-  return { ...actual, api: { ...actual.api, listShortUrls: vi.fn() } };
+  return {
+    ...actual,
+    api: { ...actual.api, listShortUrls: vi.fn(), createShortUrl: vi.fn() },
+  };
 });
 
 function renderWithQueryClient(ui: React.ReactElement) {
@@ -20,6 +23,7 @@ function renderWithQueryClient(ui: React.ReactElement) {
 }
 
 const listShortUrls = vi.mocked(api.listShortUrls);
+const createShortUrl = vi.mocked(api.createShortUrl);
 
 function page(items: ShortUrlList['items'], total: number, limit: number): ShortUrlList {
   return { items, total, limit, offset: 0 };
@@ -114,5 +118,65 @@ describe('UrlsPage', () => {
     await waitFor(() =>
       expect(listShortUrls).toHaveBeenLastCalledWith({ limit: 40, offset: 0 }),
     );
+  });
+
+  it('shortens a URL, clears the input, and refreshes the list on success', async () => {
+    listShortUrls.mockResolvedValueOnce(page([], 0, 20));
+    createShortUrl.mockResolvedValue({
+      code: 'newcode',
+      originalUrl: 'https://example.com/new',
+      createdAt: '2026-09-16T00:00:00.000Z',
+      clickCount: 0,
+    });
+    listShortUrls.mockResolvedValue(
+      page(
+        [
+          {
+            code: 'newcode',
+            originalUrl: 'https://example.com/new',
+            createdAt: '2026-09-16T00:00:00.000Z',
+            clickCount: 0,
+          },
+        ],
+        1,
+        20,
+      ),
+    );
+
+    const user = userEvent.setup();
+    renderWithQueryClient(<UrlsPage />);
+
+    const input = await screen.findByPlaceholderText(
+      'https://example.com/a/long/path',
+    );
+    await user.type(input, 'https://example.com/new');
+    await user.click(screen.getByRole('button', { name: 'Shorten' }));
+
+    await waitFor(() =>
+      expect(createShortUrl).toHaveBeenCalledWith('https://example.com/new'),
+    );
+    await waitFor(() => expect(input).toHaveValue(''));
+    // Proves the list query was invalidated by the mutation, not just that
+    // the mutation itself succeeded.
+    expect(await screen.findByText('/newcode')).toBeInTheDocument();
+  });
+
+  it('shows an inline error and keeps the input when shortening fails', async () => {
+    listShortUrls.mockResolvedValue(page([], 0, 20));
+    createShortUrl.mockRejectedValue(new Error('bad request'));
+
+    const user = userEvent.setup();
+    renderWithQueryClient(<UrlsPage />);
+
+    const input = await screen.findByPlaceholderText(
+      'https://example.com/a/long/path',
+    );
+    await user.type(input, 'not-a-url');
+    await user.click(screen.getByRole('button', { name: 'Shorten' }));
+
+    expect(
+      await screen.findByText('Failed to shorten URL.'),
+    ).toBeInTheDocument();
+    expect(input).toHaveValue('not-a-url');
   });
 });
