@@ -18,6 +18,8 @@ describe('ShortUrlService', () => {
       create: jest.Mock;
       findUnique: jest.Mock;
       update: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
     };
   };
 
@@ -27,6 +29,8 @@ describe('ShortUrlService', () => {
         create: jest.fn(),
         findUnique: jest.fn(),
         update: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
       },
     };
 
@@ -103,6 +107,87 @@ describe('ShortUrlService', () => {
         service.create('key-1', { originalUrl: 'https://example.com' }),
       ).rejects.toThrow('db is down');
       expect(prisma.shortUrl.create).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('findAllForUser', () => {
+    it("scopes results to the given user's own API keys, most recent first", async () => {
+      prisma.shortUrl.findMany.mockResolvedValue([
+        {
+          code: 'aaa1111',
+          originalUrl: 'https://example.com/a',
+          createdAt: new Date('2026-09-16T00:00:00Z'),
+          clickCount: 3,
+        },
+      ]);
+      prisma.shortUrl.count.mockResolvedValue(1);
+
+      const result = await service.findAllForUser('user-1', 20, 0);
+
+      expect(prisma.shortUrl.findMany).toHaveBeenCalledWith({
+        where: { apiKey: { userId: 'user-1' } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        skip: 0,
+      });
+      expect(prisma.shortUrl.count).toHaveBeenCalledWith({
+        where: { apiKey: { userId: 'user-1' } },
+      });
+      expect(result).toEqual({
+        items: [
+          {
+            code: 'aaa1111',
+            originalUrl: 'https://example.com/a',
+            createdAt: new Date('2026-09-16T00:00:00Z'),
+            clickCount: 3,
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
+    });
+
+    it('passes limit/offset through for pagination', async () => {
+      prisma.shortUrl.findMany.mockResolvedValue([]);
+      prisma.shortUrl.count.mockResolvedValue(45);
+
+      const result = await service.findAllForUser('user-1', 10, 20);
+
+      expect(prisma.shortUrl.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10, skip: 20 }),
+      );
+      expect(result.limit).toBe(10);
+      expect(result.offset).toBe(20);
+      expect(result.total).toBe(45);
+    });
+  });
+
+  describe('findAllForApiKey', () => {
+    it('scopes results to only the calling API key, not sibling keys under the same user', async () => {
+      prisma.shortUrl.findMany.mockResolvedValue([
+        {
+          code: 'bbb2222',
+          originalUrl: 'https://example.com/b',
+          createdAt: new Date('2026-09-16T00:00:00Z'),
+          clickCount: 0,
+        },
+      ]);
+      prisma.shortUrl.count.mockResolvedValue(1);
+
+      const result = await service.findAllForApiKey('key-1', 20, 0);
+
+      expect(prisma.shortUrl.findMany).toHaveBeenCalledWith({
+        where: { apiKeyId: 'key-1' },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        skip: 0,
+      });
+      expect(prisma.shortUrl.count).toHaveBeenCalledWith({
+        where: { apiKeyId: 'key-1' },
+      });
+      expect(result.items).toHaveLength(1);
+      expect(result.total).toBe(1);
     });
   });
 

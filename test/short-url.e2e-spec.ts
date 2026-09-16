@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -7,13 +8,18 @@ import { PrismaService } from './../src/prisma/prisma.service';
 
 describe('ShortUrl (e2e)', () => {
   let app: INestApplication<App>;
+  const jwtServiceMock = { verifyAsync: jest.fn() };
+  const dashboardUser = { id: 'user-1', email: 'user@example.com' };
   const prismaMock = {
+    user: { findUniqueOrThrow: jest.fn() },
     apiKey: { findFirst: jest.fn(), update: jest.fn() },
     usageLog: { create: jest.fn() },
     shortUrl: {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
     },
   };
 
@@ -21,12 +27,19 @@ describe('ShortUrl (e2e)', () => {
     prismaMock.apiKey.update.mockResolvedValue({});
     prismaMock.usageLog.create.mockResolvedValue({});
     prismaMock.shortUrl.update.mockResolvedValue({});
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: dashboardUser.id,
+      email: dashboardUser.email,
+    });
+    prismaMock.user.findUniqueOrThrow.mockResolvedValue(dashboardUser);
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [AppModule],
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
+      .overrideProvider(JwtService)
+      .useValue(jwtServiceMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -84,6 +97,117 @@ describe('ShortUrl (e2e)', () => {
       .post('/api/v1/short-url/shorten')
       .send({ originalUrl: 'https://example.com' })
       .expect(401);
+  });
+
+  it("lists only the calling API key's own short URLs via GET /api/v1/short-url", async () => {
+    prismaMock.apiKey.findFirst.mockResolvedValue({
+      id: 'key-1',
+      userId: 'user-1',
+      revokedAt: null,
+    });
+    prismaMock.shortUrl.findMany.mockResolvedValue([
+      {
+        code: 'ccc3333',
+        originalUrl: 'https://example.com/c',
+        createdAt: new Date('2026-09-16T00:00:00Z'),
+        clickCount: 0,
+      },
+    ]);
+    prismaMock.shortUrl.count.mockResolvedValue(1);
+
+    const response = await request(app.getHttpServer())
+      .get('/api/v1/short-url')
+      .set('x-api-key', 'nrn_validkeymaterial')
+      .expect(200);
+
+    expect(prismaMock.shortUrl.findMany).toHaveBeenCalledWith({
+      where: { apiKeyId: 'key-1' },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      skip: 0,
+    });
+    expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
+      data: {
+        apiKeyId: 'key-1',
+        service: 'url-shortener',
+        endpoint: '/api/v1/short-url',
+      },
+    });
+    expect(response.body).toEqual({
+      items: [
+        {
+          code: 'ccc3333',
+          originalUrl: 'https://example.com/c',
+          createdAt: '2026-09-16T00:00:00.000Z',
+          clickCount: 0,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+  });
+
+  it('rejects GET /api/v1/short-url with no x-api-key header', () => {
+    return request(app.getHttpServer()).get('/api/v1/short-url').expect(401);
+  });
+
+  it("lists the caller's own short URLs via the dashboard route, not the ApiKeyGuard", async () => {
+    prismaMock.shortUrl.findMany.mockResolvedValue([
+      {
+        code: 'aaa1111',
+        originalUrl: 'https://example.com/a',
+        createdAt: new Date('2026-09-16T00:00:00Z'),
+        clickCount: 3,
+      },
+    ]);
+    prismaMock.shortUrl.count.mockResolvedValue(1);
+
+    const response = await request(app.getHttpServer())
+      .get('/short-url')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(200);
+
+    expect(prismaMock.shortUrl.findMany).toHaveBeenCalledWith({
+      where: { apiKey: { userId: dashboardUser.id } },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+      skip: 0,
+    });
+    // Proves the literal '/short-url' route wasn't swallowed by the
+    // catch-all GET ':code' handler, which would have called findUnique.
+    expect(prismaMock.shortUrl.findUnique).not.toHaveBeenCalled();
+    expect(response.body).toEqual({
+      items: [
+        {
+          code: 'aaa1111',
+          originalUrl: 'https://example.com/a',
+          createdAt: '2026-09-16T00:00:00.000Z',
+          clickCount: 3,
+        },
+      ],
+      total: 1,
+      limit: 20,
+      offset: 0,
+    });
+  });
+
+  it('respects limit/offset query params on GET /short-url', async () => {
+    prismaMock.shortUrl.findMany.mockResolvedValue([]);
+    prismaMock.shortUrl.count.mockResolvedValue(0);
+
+    await request(app.getHttpServer())
+      .get('/short-url?limit=5&offset=10')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(200);
+
+    expect(prismaMock.shortUrl.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({ take: 5, skip: 10 }),
+    );
+  });
+
+  it('rejects GET /short-url with no Authorization header', () => {
+    return request(app.getHttpServer()).get('/short-url').expect(401);
   });
 
   it('redirects GET /:code to the original URL and increments clickCount', async () => {

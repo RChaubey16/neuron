@@ -66,6 +66,20 @@ export type UsageSummary = {
   count: number;
 };
 
+export type ShortUrl = {
+  code: string;
+  originalUrl: string;
+  createdAt: string;
+  clickCount: number;
+};
+
+export type ShortUrlList = {
+  items: ShortUrl[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export const api = {
   getMe: () => apiFetch<User>('/me'),
 
@@ -81,6 +95,14 @@ export const api = {
     apiFetch<void>(`/api-keys/${id}`, { method: 'DELETE' }),
 
   getUsage: () => apiFetch<UsageSummary[]>('/usage'),
+
+  listShortUrls: (params?: { limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return apiFetch<ShortUrlList>(`/short-url${qs ? `?${qs}` : ''}`);
+  },
 };
 
 export function googleSignInUrl(): string {

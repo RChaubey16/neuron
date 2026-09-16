@@ -6,6 +6,7 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   Redirect,
   UseGuards,
   UseInterceptors,
@@ -13,13 +14,17 @@ import {
 import { Throttle } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
 import { CurrentApiKey } from '../api-keys/decorators/current-api-key.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Service } from '../usage/decorators/service.decorator';
 import { UsageLoggingInterceptor } from '../usage/interceptors/usage-logging.interceptor';
 import { ShortUrlService } from './short-url.service';
 import { CreateShortUrlDto } from './dto/create-short-url.dto';
 import { ShortUrlResponseDto } from './dto/short-url-response.dto';
+import { ShortUrlListResponseDto } from './dto/short-url-list-response.dto';
+import { ListShortUrlsQueryDto } from './dto/list-short-urls-query.dto';
 import { ShortUrlCodeParamsDto } from './dto/short-url-code-params.dto';
-import type { ApiKey } from '../../generated/prisma';
+import type { ApiKey, User } from '../../generated/prisma';
 
 @Controller()
 export class ShortUrlController {
@@ -36,6 +41,37 @@ export class ShortUrlController {
     @Body() dto: CreateShortUrlDto,
   ): Promise<ShortUrlResponseDto> {
     return this.shortUrlService.create(apiKey.id, dto);
+  }
+
+  @Get('api/v1/short-url')
+  @UseGuards(ApiKeyGuard)
+  @Service('url-shortener')
+  @UseInterceptors(UsageLoggingInterceptor)
+  findAllForApiKey(
+    @CurrentApiKey() apiKey: ApiKey,
+    @Query() query: ListShortUrlsQueryDto,
+  ): Promise<ShortUrlListResponseDto> {
+    return this.shortUrlService.findAllForApiKey(
+      apiKey.id,
+      query.limit,
+      query.offset,
+    );
+  }
+
+  // Dashboard route (JwtAuthGuard, unversioned) — must stay declared before
+  // the GET ':code' catch-all below, or that single-segment param route
+  // would swallow it as `code = "short-url"` (see that handler's comment).
+  @Get('short-url')
+  @UseGuards(JwtAuthGuard)
+  findAllForUser(
+    @CurrentUser() user: User,
+    @Query() query: ListShortUrlsQueryDto,
+  ): Promise<ShortUrlListResponseDto> {
+    return this.shortUrlService.findAllForUser(
+      user.id,
+      query.limit,
+      query.offset,
+    );
   }
 
   // Unauthenticated by design — meant to be hit directly by browsers.

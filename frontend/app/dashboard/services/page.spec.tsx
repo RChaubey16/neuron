@@ -28,11 +28,12 @@ describe('ServicesPage', () => {
     ).toBeInTheDocument();
   });
 
-  it('still shows the single URL shortener endpoint with no extra list', () => {
+  it('lists both URL shortener endpoints', () => {
     render(<ServicesPage />);
 
     expect(
       screen.getByText('POST /api/v1/short-url/shorten'),
     ).toBeInTheDocument();
+    expect(screen.getByText('GET /api/v1/short-url')).toBeInTheDocument();
   });
 });

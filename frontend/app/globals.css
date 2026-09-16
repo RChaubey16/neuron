@@ -1,25 +1,24 @@
 @import "tailwindcss";
 
 /*
- * Design tokens extracted from the Claude Design mockup ("Neuron Dashboard.html").
- * Light values are the defaults; dark values override the same custom properties
- * under `prefers-color-scheme: dark`, then `@theme inline` re-exposes each one as
- * a Tailwind color/font utility (bg-surface, text-fg-2, border-border, font-display, ...).
+ * Neuron dashboard design tokens — light theme only, deliberately: this is an
+ * internal dev-tool dashboard, not a marketing surface, so one consistent
+ * theme beats matching the visitor's OS setting.
  */
 :root {
-  --canvas: #ffffff;
+  --canvas: #f6f7f9;
   --surface: #ffffff;
-  --surface-2: #f8f9f9;
+  --surface-2: #eef1f4;
   --elevated: #ffffff;
-  --border: #e9ebed;
-  --border-strong: #d0d5dd;
-  --fg: #2f3941;
-  --fg-2: #49545c;
-  --fg-3: #68737d;
+  --border: #e3e6ec;
+  --border-strong: #cbd1dc;
+  --fg: #12151b;
+  --fg-2: #4b5565;
+  --fg-3: #868fa0;
 
-  --accent: #1570ef;
-  --accent-hover: #0e5bc4;
-  --accent-soft: rgba(21, 112, 239, 0.13);
+  --accent: #4e46e0;
+  --accent-hover: #3d35c4;
+  --accent-soft: rgba(78, 70, 224, 0.1);
 
   --success: #039855;
   --success-soft: rgba(3, 152, 85, 0.08);
@@ -28,34 +27,9 @@
   --warning: #dc6803;
   --warning-soft: rgba(220, 104, 3, 0.08);
 
-  --chart-1: #1570ef;
-  --chart-2: #7a5af8;
-  --chart-3: #0ba5ec;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --canvas: #0a0e14;
-    --surface: #111620;
-    --surface-2: #161c28;
-    --elevated: #1a212e;
-    --border: #232b38;
-    --border-strong: #323b4a;
-    --fg: #f2f4f7;
-    --fg-2: #98a2b3;
-    --fg-3: #68737d;
-
-    --accent: #1570ef;
-    --accent-hover: #4a95f5;
-    --accent-soft: rgba(21, 112, 239, 0.16);
-
-    --success: #12b76a;
-    --success-soft: rgba(18, 183, 106, 0.12);
-    --danger: #f04438;
-    --danger-soft: rgba(240, 68, 56, 0.12);
-    --warning: #f79009;
-    --warning-soft: rgba(247, 144, 9, 0.12);
-  }
+  --chart-1: #4e46e0;
+  --chart-2: #f59e0b;
+  --chart-3: #0ea5e9;
 }
 
 @theme inline {

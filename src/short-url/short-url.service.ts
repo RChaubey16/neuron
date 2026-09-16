@@ -9,6 +9,7 @@ import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateShortUrlDto } from './dto/create-short-url.dto';
 import { ShortUrlResponseDto } from './dto/short-url-response.dto';
+import { ShortUrlListResponseDto } from './dto/short-url-list-response.dto';
 
 export const CODE_LENGTH = 7;
 const MAX_CREATE_ATTEMPTS = 5;
@@ -54,6 +55,77 @@ export class ShortUrlService {
     throw new ConflictException(
       'Could not generate a unique short code, please try again',
     );
+  }
+
+  /**
+   * Lists short URLs created by any of the given user's API keys, most
+   * recently created first, for the dashboard's URL listing page.
+   *
+   * @param userId - Id of the dashboard user; `ShortUrl` only links to
+   *   `ApiKey`, not `User`, directly, so results are scoped via that relation
+   * @param limit - Max number of rows to return
+   * @param offset - Number of rows to skip, for pagination
+   * @returns A page of the user's short URLs plus the total matching count
+   */
+  async findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<ShortUrlListResponseDto> {
+    return this.listByWhere({ apiKey: { userId } }, limit, offset);
+  }
+
+  /**
+   * Lists short URLs created by the given API key itself, most recently
+   * created first, for the machine-facing `GET /api/v1/short-url` route.
+   * Scoped to just the calling key — unlike the dashboard's
+   * `findAllForUser`, which spans every key a human owns — since an API key
+   * is meant to be a narrowly-scoped machine credential, not full account
+   * access.
+   *
+   * @param apiKeyId - Id of the ApiKey making the request
+   * @param limit - Max number of rows to return
+   * @param offset - Number of rows to skip, for pagination
+   * @returns A page of the key's short URLs plus the total matching count
+   */
+  async findAllForApiKey(
+    apiKeyId: string,
+    limit: number,
+    offset: number,
+  ): Promise<ShortUrlListResponseDto> {
+    return this.listByWhere({ apiKeyId }, limit, offset);
+  }
+
+  /**
+   * Shared pagination/query logic behind `findAllForUser` and
+   * `findAllForApiKey`, which differ only in how results are scoped.
+   *
+   * @param where - Prisma filter scoping results to the caller
+   * @param limit - Max number of rows to return
+   * @param offset - Number of rows to skip, for pagination
+   * @returns A page of matching short URLs plus the total matching count
+   */
+  private async listByWhere(
+    where: Prisma.ShortUrlWhereInput,
+    limit: number,
+    offset: number,
+  ): Promise<ShortUrlListResponseDto> {
+    const [shortUrls, total] = await Promise.all([
+      this.prisma.shortUrl.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.shortUrl.count({ where }),
+    ]);
+
+    return new ShortUrlListResponseDto({
+      items: shortUrls.map((shortUrl) => new ShortUrlResponseDto(shortUrl)),
+      total,
+      limit,
+      offset,
+    });
   }
 
   /**

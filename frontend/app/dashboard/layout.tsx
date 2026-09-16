@@ -27,9 +27,9 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col">
+    <div className="flex min-h-full flex-1 flex-col lg:flex-row">
       <DashboardNav userEmail={user?.email} onSignOut={signOut} />
-      <main className="mx-auto w-full max-w-5xl flex-1 px-6 py-10">
+      <main className="w-full max-w-6xl flex-1 px-4 py-8 sm:px-6 sm:py-10 lg:ml-60 lg:px-10 lg:py-10">
         {children}
       </main>
     </div>
