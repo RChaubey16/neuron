@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
-import { DashboardApiKeyGuard } from '../api-keys/guards/dashboard-api-key.guard';
 import { CurrentApiKey } from '../api-keys/decorators/current-api-key.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -41,7 +40,10 @@ export class ShortUrlController {
     @CurrentApiKey() apiKey: ApiKey,
     @Body() dto: CreateShortUrlDto,
   ): Promise<ShortUrlResponseDto> {
-    return this.shortUrlService.create(apiKey.id, dto);
+    return this.shortUrlService.create(
+      { userId: apiKey.userId, apiKeyId: apiKey.id },
+      dto,
+    );
   }
 
   @Get('api/v1/short-url')
@@ -75,21 +77,20 @@ export class ShortUrlController {
     );
   }
 
-  // Dashboard-native counterpart to POST /api/v1/short-url/shorten: bridges
-  // a logged-in human's session JWT to the same ApiKeyId-scoped service
-  // method via DashboardApiKeyGuard's hidden per-user system key, so a
-  // dashboard-created link lands in the exact same tables/usage log as a
-  // machine-created one (see docs/2026-09-16-dashboard-service-usage-design.md).
+  // Dashboard-native counterpart to POST /api/v1/short-url/shorten: calls
+  // the same service method directly with the logged-in user's id, no
+  // second guard or fabricated ApiKey involved (see
+  // docs/2026-09-17-direct-ownership-design.md).
   @Post('short-url')
   @HttpCode(HttpStatus.CREATED)
-  @UseGuards(JwtAuthGuard, DashboardApiKeyGuard)
+  @UseGuards(JwtAuthGuard)
   @Service('url-shortener')
   @UseInterceptors(UsageLoggingInterceptor)
   createFromDashboard(
-    @CurrentApiKey() apiKey: ApiKey,
+    @CurrentUser() user: User,
     @Body() dto: CreateShortUrlDto,
   ): Promise<ShortUrlResponseDto> {
-    return this.shortUrlService.create(apiKey.id, dto);
+    return this.shortUrlService.create({ userId: user.id }, dto);
   }
 
   // Unauthenticated by design — meant to be hit directly by browsers.
