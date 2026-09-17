@@ -12,28 +12,28 @@ datasource db {
   provider = "postgresql"
 }
 
-/// Synced lazily from Google's OAuth profile on a user's first login —
-/// `id` is Google's stable `sub` claim, not Prisma-generated.
 model User {
   id        String   @id
   email     String   @unique
   createdAt DateTime @default(now())
 
-  apiKeys ApiKey[]
+  apiKeys   ApiKey[]
+  shortUrls ShortUrl[]
+  emailJobs EmailJob[]
+  usageLogs UsageLog[]
 }
 
 /// Only the hash of a generated key is ever stored — the raw key is returned
 /// once at creation time and never persisted or logged.
 model ApiKey {
-  id          String    @id @default(uuid())
-  userId      String
-  hashedKey   String    @unique
-  keyPrefix   String
-  name        String?
-  isSystemKey Boolean   @default(false)
-  createdAt   DateTime  @default(now())
-  lastUsedAt  DateTime?
-  revokedAt   DateTime?
+  id         String    @id @default(uuid())
+  userId     String
+  hashedKey  String    @unique
+  keyPrefix  String
+  name       String?
+  createdAt  DateTime  @default(now())
+  lastUsedAt DateTime?
+  revokedAt  DateTime?
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageLogs UsageLog[]
@@ -44,33 +44,43 @@ model ApiKey {
 }
 
 /// One row per authenticated service call, written by the cross-cutting
-/// usage-logging interceptor/guard rather than by individual service modules.
+/// usage-logging interceptor. `apiKeyId` is set only when a machine's real
+/// API key made the call; a dashboard-native call leaves it null and is
+/// identified by `userId` alone.
 model UsageLog {
   id        String   @id @default(uuid())
-  apiKeyId  String
+  apiKeyId  String?
+  userId    String
   service   String
   endpoint  String
   createdAt DateTime @default(now())
 
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([apiKeyId])
+  @@index([userId])
   @@index([service, createdAt])
 }
 
 /// A shortened URL. `code` is the public-facing identifier used in the
-/// unauthenticated `GET /:code` redirect route.
+/// unauthenticated `GET /:code` redirect route. `apiKeyId` is set only when
+/// a machine's real API key created it; a dashboard-native creation leaves
+/// it null and is identified by `userId` alone.
 model ShortUrl {
   id          String   @id @default(uuid())
   code        String   @unique
   originalUrl String
-  apiKeyId    String
+  apiKeyId    String?
+  userId      String
   createdAt   DateTime @default(now())
   clickCount  Int      @default(0)
 
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([apiKeyId])
+  @@index([userId])
 }
 
 enum EmailJobStatus {
@@ -82,12 +92,13 @@ enum EmailJobStatus {
 }
 
 /// A queued email send, tracked durably in Postgres since BullMQ's own Redis
-/// job state is transient (pruned by `removeOnComplete`/`removeOnFail`) and
-/// was never meant as a queryable history. `id` doubles as the underlying
-/// BullMQ job's `jobId`, so the two never need reconciling.
+/// job state is transient. `id` doubles as the underlying BullMQ job's
+/// `jobId`. `apiKeyId` is set only when a machine's real API key queued it;
+/// a dashboard-native send leaves it null and is identified by `userId` alone.
 model EmailJob {
   id           String         @id @default(uuid())
-  apiKeyId     String
+  apiKeyId     String?
+  userId       String
   status       EmailJobStatus @default(QUEUED)
   to           String[]
   subject      String
@@ -98,7 +109,9 @@ model EmailJob {
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
-  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+  apiKey ApiKey? @relation(fields: [apiKeyId], references: [id], onDelete: SetNull)
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([apiKeyId])
+  @@index([userId])
 }
