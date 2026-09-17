@@ -11,11 +11,16 @@ describe('UsageLoggingInterceptor', () => {
   let prisma: { usageLog: { create: jest.Mock } };
   let reflector: { get: jest.Mock };
 
-  const contextFor = (apiKey: { id: string } | undefined, path: string) => {
-    const request: { apiKey?: { id: string }; route: { path: string } } = {
-      apiKey,
-      route: { path },
-    };
+  const contextFor = (
+    apiKey: { id: string; userId: string } | undefined,
+    path: string,
+    user?: { id: string },
+  ) => {
+    const request: {
+      apiKey?: { id: string; userId: string };
+      user?: { id: string };
+      route: { path: string };
+    } = { apiKey, user, route: { path } };
     return {
       switchToHttp: () => ({ getRequest: () => request }),
       getHandler: () => contextFor,
@@ -48,7 +53,7 @@ describe('UsageLoggingInterceptor', () => {
   it('writes a UsageLog row after the handler completes, for a route tagged with @Service()', async () => {
     reflector.get.mockReturnValue('notifications');
     prisma.usageLog.create.mockResolvedValue({});
-    const context = contextFor({ id: 'key-1' }, '/notifications/email');
+    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
 
     const result = await lastValueFrom(
       interceptor.intercept(context, handlerReturning({ ok: true })),
@@ -61,6 +66,7 @@ describe('UsageLoggingInterceptor', () => {
     );
     expect(prisma.usageLog.create).toHaveBeenCalledWith({
       data: {
+        userId: 'user-1',
         apiKeyId: 'key-1',
         service: 'notifications',
         endpoint: '/notifications/email',
@@ -70,14 +76,14 @@ describe('UsageLoggingInterceptor', () => {
 
   it('does not write a log for a route with no @Service() metadata', async () => {
     reflector.get.mockReturnValue(undefined);
-    const context = contextFor({ id: 'key-1' }, '/me');
+    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/me');
 
     await lastValueFrom(interceptor.intercept(context, handlerReturning({})));
 
     expect(prisma.usageLog.create).not.toHaveBeenCalled();
   });
 
-  it('does not write a log when no ApiKey was resolved on the request', async () => {
+  it('does not write a log when neither an ApiKey nor a User was resolved on the request', async () => {
     reflector.get.mockReturnValue('notifications');
     const context = contextFor(undefined, '/notifications/email');
 
@@ -86,10 +92,27 @@ describe('UsageLoggingInterceptor', () => {
     expect(prisma.usageLog.create).not.toHaveBeenCalled();
   });
 
+  it('writes a UsageLog row keyed by userId with a null apiKeyId for a dashboard-native call (no ApiKey on the request)', async () => {
+    reflector.get.mockReturnValue('url-shortener');
+    prisma.usageLog.create.mockResolvedValue({});
+    const context = contextFor(undefined, '/short-url', { id: 'user-1' });
+
+    await lastValueFrom(interceptor.intercept(context, handlerReturning({})));
+
+    expect(prisma.usageLog.create).toHaveBeenCalledWith({
+      data: {
+        userId: 'user-1',
+        apiKeyId: null,
+        service: 'url-shortener',
+        endpoint: '/short-url',
+      },
+    });
+  });
+
   it('still writes a log when the handler throws', async () => {
     reflector.get.mockReturnValue('notifications');
     prisma.usageLog.create.mockResolvedValue({});
-    const context = contextFor({ id: 'key-1' }, '/notifications/email');
+    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
     const error = new Error('downstream failure');
 
     await expect(
@@ -98,6 +121,7 @@ describe('UsageLoggingInterceptor', () => {
 
     expect(prisma.usageLog.create).toHaveBeenCalledWith({
       data: {
+        userId: 'user-1',
         apiKeyId: 'key-1',
         service: 'notifications',
         endpoint: '/notifications/email',
@@ -107,7 +131,7 @@ describe('UsageLoggingInterceptor', () => {
 
   it('subscribes to the lazy PrismaPromise instead of dropping it (void-operator regression)', async () => {
     reflector.get.mockReturnValue('notifications');
-    const context = contextFor({ id: 'key-1' }, '/notifications/email');
+    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
 
     let subscribed = false;
     const then = (
@@ -133,7 +157,7 @@ describe('UsageLoggingInterceptor', () => {
     const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     reflector.get.mockReturnValue('notifications');
     prisma.usageLog.create.mockRejectedValue(new Error('connection reset'));
-    const context = contextFor({ id: 'key-1' }, '/notifications/email');
+    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
 
     const result = await lastValueFrom(
       interceptor.intercept(context, handlerReturning({ ok: true })),

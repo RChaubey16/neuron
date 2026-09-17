@@ -11,7 +11,7 @@ import { Observable } from 'rxjs';
 import { finalize } from 'rxjs/operators';
 import { PrismaService } from '../../prisma/prisma.service';
 import { SERVICE_KEY } from '../decorators/service.decorator';
-import { ApiKey } from '../../../generated/prisma';
+import { ApiKey, User } from '../../../generated/prisma';
 
 @Injectable()
 export class UsageLoggingInterceptor implements NestInterceptor {
@@ -24,7 +24,8 @@ export class UsageLoggingInterceptor implements NestInterceptor {
 
   /**
    * Writes a UsageLog row for every request handled by a route tagged with
-   * @Service(), once ApiKeyGuard has resolved the caller's ApiKey. Runs
+   * @Service(), once either ApiKeyGuard (a machine call) or JwtAuthGuard (a
+   * dashboard-native call) has resolved an identity for the request. Runs
    * whether the handler succeeds or throws, and never blocks or fails the
    * request itself.
    */
@@ -36,13 +37,15 @@ export class UsageLoggingInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest<
       Omit<Request, 'route'> & {
         apiKey?: ApiKey;
+        user?: User;
         route: { path: string };
       }
     >();
 
     return next.handle().pipe(
       finalize(() => {
-        if (!service || !request.apiKey) {
+        const userId = request.user?.id ?? request.apiKey?.userId;
+        if (!service || !userId) {
           return;
         }
 
@@ -52,7 +55,8 @@ export class UsageLoggingInterceptor implements NestInterceptor {
         this.prisma.usageLog
           .create({
             data: {
-              apiKeyId: request.apiKey.id,
+              userId,
+              apiKeyId: request.apiKey?.id ?? null,
               service,
               endpoint: request.route.path,
             },
