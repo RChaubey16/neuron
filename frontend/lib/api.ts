@@ -62,7 +62,7 @@ export type CreatedApiKey = ApiKey & { key: string };
 export type UsageSummary = {
   service: string;
   date: string;
-  apiKeyId: string;
+  apiKeyId: string | null;
   count: number;
 };
 

@@ -295,7 +295,7 @@ export default function UsagePage() {
                         {serviceLabel(row.service)}
                       </td>
                       <td className="px-5 py-3 font-mono text-fg-3">
-                        {row.apiKeyId.slice(0, 8)}…
+                        {row.apiKeyId ? `${row.apiKeyId.slice(0, 8)}…` : 'Dashboard'}
                       </td>
                       <td className="px-5 py-3 text-fg-2">{row.date}</td>
                       <td className="px-5 py-3 text-right text-fg">
