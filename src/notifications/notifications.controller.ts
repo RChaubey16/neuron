@@ -13,7 +13,6 @@ import {
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
-import { DashboardApiKeyGuard } from '../api-keys/guards/dashboard-api-key.guard';
 import { CurrentApiKey } from '../api-keys/decorators/current-api-key.decorator';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -49,7 +48,10 @@ export class NotificationsController {
     @CurrentApiKey() apiKey: ApiKey,
     @Body() dto: CreateEmailDto,
   ): Promise<EmailJobResponseDto> {
-    return this.notificationsService.queueEmail(apiKey.id, dto);
+    return this.notificationsService.queueEmail(
+      { userId: apiKey.userId, apiKeyId: apiKey.id },
+      dto,
+    );
   }
 
   // 'templates' routes are registered ahead of GET/POST ':jobId' routes —
@@ -77,7 +79,7 @@ export class NotificationsController {
     @Body() dto: SendTemplatedEmailDto,
   ): Promise<EmailJobResponseDto> {
     return this.notificationsService.sendTemplatedEmail(
-      apiKey.id,
+      { userId: apiKey.userId, apiKeyId: apiKey.id },
       params.templateKey,
       dto,
     );
@@ -137,20 +139,20 @@ export class NotificationsController {
     );
   }
 
-  // Dashboard-native counterpart to POST /api/v1/notifications/email:
-  // bridges a logged-in human's session JWT to the same apiKeyId-scoped
-  // service method via DashboardApiKeyGuard's hidden per-user system key
-  // (see docs/2026-09-16-dashboard-service-usage-design.md).
+  // Dashboard-native counterpart to POST /api/v1/notifications/email: calls
+  // the same service method directly with the logged-in user's id, no
+  // second guard or fabricated ApiKey involved (see
+  // docs/2026-09-17-direct-ownership-design.md).
   @Post('notifications/email')
   @HttpCode(HttpStatus.ACCEPTED)
-  @UseGuards(JwtAuthGuard, DashboardApiKeyGuard)
+  @UseGuards(JwtAuthGuard)
   @Service('email-notifications')
   @UseInterceptors(UsageLoggingInterceptor)
   sendFromDashboard(
-    @CurrentApiKey() apiKey: ApiKey,
+    @CurrentUser() user: User,
     @Body() dto: CreateEmailDto,
   ): Promise<EmailJobResponseDto> {
-    return this.notificationsService.queueEmail(apiKey.id, dto);
+    return this.notificationsService.queueEmail({ userId: user.id }, dto);
   }
 
   // Dashboard actions on an existing job. No DashboardApiKeyGuard/@Service()/
