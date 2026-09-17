@@ -56,9 +56,10 @@ describe('ShortUrlService', () => {
           }),
       );
 
-      const result = await service.create('key-1', {
-        originalUrl: 'https://example.com/very/long/path',
-      });
+      const result = await service.create(
+        { userId: 'user-1', apiKeyId: 'key-1' },
+        { originalUrl: 'https://example.com/very/long/path' },
+      );
 
       expect(result.code).toMatch(/^[A-Za-z0-9_-]{7}$/);
       expect(result.originalUrl).toBe('https://example.com/very/long/path');
@@ -67,6 +68,7 @@ describe('ShortUrlService', () => {
         data: {
           code: result.code,
           originalUrl: 'https://example.com/very/long/path',
+          userId: 'user-1',
           apiKeyId: 'key-1',
         },
       });
@@ -84,9 +86,10 @@ describe('ShortUrlService', () => {
           }),
         );
 
-      const result = await service.create('key-1', {
-        originalUrl: 'https://example.com',
-      });
+      const result = await service.create(
+        { userId: 'user-1', apiKeyId: 'key-1' },
+        { originalUrl: 'https://example.com' },
+      );
 
       expect(prisma.shortUrl.create).toHaveBeenCalledTimes(2);
       expect(result.originalUrl).toBe('https://example.com');
@@ -96,7 +99,10 @@ describe('ShortUrlService', () => {
       prisma.shortUrl.create.mockRejectedValue(uniqueConstraintError());
 
       await expect(
-        service.create('key-1', { originalUrl: 'https://example.com' }),
+        service.create(
+          { userId: 'user-1', apiKeyId: 'key-1' },
+          { originalUrl: 'https://example.com' },
+        ),
       ).rejects.toThrow(ConflictException);
     });
 
@@ -104,9 +110,38 @@ describe('ShortUrlService', () => {
       prisma.shortUrl.create.mockRejectedValue(new Error('db is down'));
 
       await expect(
-        service.create('key-1', { originalUrl: 'https://example.com' }),
+        service.create(
+          { userId: 'user-1', apiKeyId: 'key-1' },
+          { originalUrl: 'https://example.com' },
+        ),
       ).rejects.toThrow('db is down');
       expect(prisma.shortUrl.create).toHaveBeenCalledTimes(1);
+    });
+
+    it('persists a dashboard-originated URL with no apiKeyId', async () => {
+      prisma.shortUrl.create.mockImplementation(
+        ({ data }: { data: Record<string, unknown> }) =>
+          Promise.resolve({
+            id: 'short-1',
+            createdAt: new Date('2026-08-30T00:00:00Z'),
+            clickCount: 0,
+            ...data,
+          }),
+      );
+
+      await service.create(
+        { userId: 'user-1' },
+        { originalUrl: 'https://example.com' },
+      );
+
+      expect(prisma.shortUrl.create).toHaveBeenCalledWith({
+        data: {
+          code: expect.any(String),
+          originalUrl: 'https://example.com',
+          userId: 'user-1',
+          apiKeyId: undefined,
+        },
+      });
     });
   });
 
@@ -125,13 +160,13 @@ describe('ShortUrlService', () => {
       const result = await service.findAllForUser('user-1', 20, 0);
 
       expect(prisma.shortUrl.findMany).toHaveBeenCalledWith({
-        where: { apiKey: { userId: 'user-1' } },
+        where: { userId: 'user-1' },
         orderBy: { createdAt: 'desc' },
         take: 20,
         skip: 0,
       });
       expect(prisma.shortUrl.count).toHaveBeenCalledWith({
-        where: { apiKey: { userId: 'user-1' } },
+        where: { userId: 'user-1' },
       });
       expect(result).toEqual({
         items: [

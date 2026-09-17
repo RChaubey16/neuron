@@ -21,24 +21,30 @@ export class ShortUrlService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Creates a shortened URL owned by the given API key, retrying with a
-   * fresh code on the rare unique-constraint collision.
+   * Creates a shortened URL owned by the given user, retrying with a fresh
+   * code on the rare unique-constraint collision.
    * Throws a ConflictException if no unique code could be generated after
    * several attempts.
    *
-   * @param apiKeyId - Id of the ApiKey making the request
+   * @param owner - Id of the owning user, plus the ApiKey id when a machine
+   *   made the request (omitted for a dashboard-native call)
    * @param dto - Validated payload containing the URL to shorten
    * @returns The created short URL's metadata
    */
   async create(
-    apiKeyId: string,
+    owner: { userId: string; apiKeyId?: string },
     dto: CreateShortUrlDto,
   ): Promise<ShortUrlResponseDto> {
     for (let attempt = 0; attempt < MAX_CREATE_ATTEMPTS; attempt++) {
       const code = nanoid(CODE_LENGTH);
       try {
         const shortUrl = await this.prisma.shortUrl.create({
-          data: { code, originalUrl: dto.originalUrl, apiKeyId },
+          data: {
+            code,
+            originalUrl: dto.originalUrl,
+            userId: owner.userId,
+            apiKeyId: owner.apiKeyId,
+          },
         });
         return new ShortUrlResponseDto(shortUrl);
       } catch (error) {
@@ -58,11 +64,12 @@ export class ShortUrlService {
   }
 
   /**
-   * Lists short URLs created by any of the given user's API keys, most
-   * recently created first, for the dashboard's URL listing page.
+   * Lists short URLs owned by the given user, most recently created first,
+   * for the dashboard's URL listing page. Spans every URL the user owns
+   * regardless of whether it was created via a real API key or directly
+   * from the dashboard.
    *
-   * @param userId - Id of the dashboard user; `ShortUrl` only links to
-   *   `ApiKey`, not `User`, directly, so results are scoped via that relation
+   * @param userId - Id of the dashboard user
    * @param limit - Max number of rows to return
    * @param offset - Number of rows to skip, for pagination
    * @returns A page of the user's short URLs plus the total matching count
@@ -72,7 +79,7 @@ export class ShortUrlService {
     limit: number,
     offset: number,
   ): Promise<ShortUrlListResponseDto> {
-    return this.listByWhere({ apiKey: { userId } }, limit, offset);
+    return this.listByWhere({ userId }, limit, offset);
   }
 
   /**
