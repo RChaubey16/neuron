@@ -40,6 +40,28 @@ describe('UsageService', () => {
       ]);
     });
 
+    it('carries a null apiKeyId through unchanged for a dashboard-originated usage group', async () => {
+      prisma.$queryRaw.mockResolvedValue([
+        {
+          service: 'notifications',
+          date: new Date('2026-08-30T00:00:00Z'),
+          apiKeyId: null,
+          count: 2n,
+        },
+      ]);
+
+      const result = await service.getSummaryForUser('user-1');
+
+      expect(result).toEqual([
+        {
+          service: 'notifications',
+          date: '2026-08-30',
+          apiKeyId: null,
+          count: 2,
+        },
+      ]);
+    });
+
     it('returns an empty array when the user has no usage', async () => {
       prisma.$queryRaw.mockResolvedValue([]);
 

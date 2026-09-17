@@ -53,7 +53,10 @@ describe('UsageLoggingInterceptor', () => {
   it('writes a UsageLog row after the handler completes, for a route tagged with @Service()', async () => {
     reflector.get.mockReturnValue('notifications');
     prisma.usageLog.create.mockResolvedValue({});
-    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
+    const context = contextFor(
+      { id: 'key-1', userId: 'user-1' },
+      '/notifications/email',
+    );
 
     const result = await lastValueFrom(
       interceptor.intercept(context, handlerReturning({ ok: true })),
@@ -112,7 +115,10 @@ describe('UsageLoggingInterceptor', () => {
   it('still writes a log when the handler throws', async () => {
     reflector.get.mockReturnValue('notifications');
     prisma.usageLog.create.mockResolvedValue({});
-    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
+    const context = contextFor(
+      { id: 'key-1', userId: 'user-1' },
+      '/notifications/email',
+    );
     const error = new Error('downstream failure');
 
     await expect(
@@ -131,7 +137,10 @@ describe('UsageLoggingInterceptor', () => {
 
   it('subscribes to the lazy PrismaPromise instead of dropping it (void-operator regression)', async () => {
     reflector.get.mockReturnValue('notifications');
-    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
+    const context = contextFor(
+      { id: 'key-1', userId: 'user-1' },
+      '/notifications/email',
+    );
 
     let subscribed = false;
     const then = (
@@ -157,7 +166,10 @@ describe('UsageLoggingInterceptor', () => {
     const errorSpy = jest.spyOn(Logger.prototype, 'error').mockImplementation();
     reflector.get.mockReturnValue('notifications');
     prisma.usageLog.create.mockRejectedValue(new Error('connection reset'));
-    const context = contextFor({ id: 'key-1', userId: 'user-1' }, '/notifications/email');
+    const context = contextFor(
+      { id: 'key-1', userId: 'user-1' },
+      '/notifications/email',
+    );
 
     const result = await lastValueFrom(
       interceptor.intercept(context, handlerReturning({ ok: true })),

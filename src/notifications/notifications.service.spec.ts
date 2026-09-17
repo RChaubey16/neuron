@@ -129,7 +129,10 @@ describe('NotificationsService', () => {
       const result = await service.sendTemplatedEmail(
         { userId: 'user-1', apiKeyId: 'key-1' },
         'welcome',
-        { to: ['recipient@example.com'], variables: { name: 'Ada', productName: 'Neuron' } },
+        {
+          to: ['recipient@example.com'],
+          variables: { name: 'Ada', productName: 'Neuron' },
+        },
       );
 
       expect(prisma.emailJob.create).toHaveBeenCalledWith({

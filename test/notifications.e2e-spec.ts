@@ -464,6 +464,14 @@ describe('Notifications (e2e)', () => {
         where: { id: jobId, userId: dashboardUser.id },
       });
       expect(response.body).toMatchObject({ status: 'QUEUED' });
+      expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
+        data: {
+          userId: dashboardUser.id,
+          apiKeyId: null,
+          service: 'email-notifications',
+          endpoint: '/notifications/email/:jobId/retry',
+        },
+      });
     });
 
     it('rejects with no Authorization header, without touching the DB', async () => {
@@ -498,6 +506,14 @@ describe('Notifications (e2e)', () => {
       expect(prismaMock.emailJob.updateMany).toHaveBeenCalledWith({
         where: { id: jobId, status: 'QUEUED' },
         data: { status: 'CANCELLED' },
+      });
+      expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
+        data: {
+          userId: dashboardUser.id,
+          apiKeyId: null,
+          service: 'email-notifications',
+          endpoint: '/notifications/email/:jobId',
+        },
       });
     });
 

@@ -155,16 +155,20 @@ export class NotificationsController {
     return this.notificationsService.queueEmail({ userId: user.id }, dto);
   }
 
-  // Dashboard actions on an existing job. No DashboardApiKeyGuard/@Service()/
-  // UsageLoggingInterceptor here — unlike sendFromDashboard, these don't act
-  // through the hidden system key, since a dashboard user should be able to
-  // retry/cancel a job created by any of their real API keys too, not just
-  // dashboard-originated ones. UsageLoggingInterceptor would be a no-op
-  // anyway with no request.apiKey attached.
+  // Dashboard actions on an existing job. No DashboardApiKeyGuard here —
+  // unlike sendFromDashboard, these act across every job the user owns, not
+  // just dashboard-originated ones, since a dashboard user should be able to
+  // retry/cancel a job created by any of their real API keys too. Usage
+  // logging still applies: UsageLoggingInterceptor resolves identity from
+  // request.user?.id ?? request.apiKey?.userId, so it works here off
+  // request.user alone with no guard/apiKey needed, matching every other
+  // dashboard-native route in this file.
 
   @Post('notifications/email/:jobId/retry')
   @HttpCode(HttpStatus.OK)
   @UseGuards(JwtAuthGuard)
+  @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   retryFromDashboard(
     @CurrentUser() user: User,
     @Param() params: EmailJobParamsDto,
@@ -175,6 +179,8 @@ export class NotificationsController {
   @Delete('notifications/email/:jobId')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(JwtAuthGuard)
+  @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   cancelFromDashboard(
     @CurrentUser() user: User,
     @Param() params: EmailJobParamsDto,
