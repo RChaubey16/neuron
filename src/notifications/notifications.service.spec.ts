@@ -16,6 +16,8 @@ describe('NotificationsService', () => {
     emailJob: {
       create: jest.Mock;
       findFirst: jest.Mock;
+      findMany: jest.Mock;
+      count: jest.Mock;
       update: jest.Mock;
       updateMany: jest.Mock;
     };
@@ -41,6 +43,8 @@ describe('NotificationsService', () => {
       emailJob: {
         create: jest.fn(),
         findFirst: jest.fn(),
+        findMany: jest.fn(),
+        count: jest.fn(),
         update: jest.fn(),
         updateMany: jest.fn(),
       },
@@ -144,6 +148,57 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('findAllForUser', () => {
+    it("scopes results to the given user's own API keys, most recent first", async () => {
+      prisma.emailJob.findMany.mockResolvedValue([job]);
+      prisma.emailJob.count.mockResolvedValue(1);
+
+      const result = await service.findAllForUser('user-1', 20, 0);
+
+      expect(prisma.emailJob.findMany).toHaveBeenCalledWith({
+        where: { apiKey: { userId: 'user-1' } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        skip: 0,
+      });
+      expect(prisma.emailJob.count).toHaveBeenCalledWith({
+        where: { apiKey: { userId: 'user-1' } },
+      });
+      expect(result).toEqual({
+        items: [
+          {
+            id: job.id,
+            status: job.status,
+            to: job.to,
+            subject: job.subject,
+            error: job.error,
+            attemptsMade: job.attemptsMade,
+            resendId: job.resendId,
+            createdAt: job.createdAt,
+            updatedAt: job.updatedAt,
+          },
+        ],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
+    });
+
+    it('passes limit/offset through to the query and response', async () => {
+      prisma.emailJob.findMany.mockResolvedValue([]);
+      prisma.emailJob.count.mockResolvedValue(45);
+
+      const result = await service.findAllForUser('user-1', 10, 20);
+
+      expect(prisma.emailJob.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 10, skip: 20 }),
+      );
+      expect(result.limit).toBe(10);
+      expect(result.offset).toBe(20);
+      expect(result.total).toBe(45);
+    });
+  });
+
   describe('listTemplates', () => {
     it('lists every registered template with its required variables', () => {
       const result = service.listTemplates();
@@ -238,6 +293,35 @@ describe('NotificationsService', () => {
     });
   });
 
+  describe('retryForUser', () => {
+    it("scopes ownership to any of the user's own API keys, not just one", async () => {
+      const failedJob = { ...job, status: 'FAILED', error: 'boom' };
+      prisma.emailJob.findFirst.mockResolvedValue(failedJob);
+      prisma.emailJob.update.mockResolvedValue({
+        ...failedJob,
+        status: 'QUEUED',
+        error: null,
+      });
+      queue.remove.mockResolvedValue(1);
+      queue.add.mockResolvedValue({});
+
+      const result = await service.retryForUser('user-1', 'job-1');
+
+      expect(prisma.emailJob.findFirst).toHaveBeenCalledWith({
+        where: { id: 'job-1', apiKey: { userId: 'user-1' } },
+      });
+      expect(result.status).toBe('QUEUED');
+    });
+
+    it("throws NotFoundException when not owned by any of the given user's API keys", async () => {
+      prisma.emailJob.findFirst.mockResolvedValue(null);
+
+      await expect(service.retryForUser('user-1', 'job-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
   describe('cancel', () => {
     it('removes a QUEUED job from BullMQ and marks it CANCELLED', async () => {
       prisma.emailJob.findFirst.mockResolvedValue(job);
@@ -279,6 +363,32 @@ describe('NotificationsService', () => {
       prisma.emailJob.findFirst.mockResolvedValue(null);
 
       await expect(service.cancel('key-1', 'job-1')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+  });
+
+  describe('cancelForUser', () => {
+    it("scopes ownership to any of the user's own API keys, not just one", async () => {
+      prisma.emailJob.findFirst.mockResolvedValue(job);
+      queue.remove.mockResolvedValue(1);
+      prisma.emailJob.updateMany.mockResolvedValue({ count: 1 });
+
+      await service.cancelForUser('user-1', 'job-1');
+
+      expect(prisma.emailJob.findFirst).toHaveBeenCalledWith({
+        where: { id: 'job-1', apiKey: { userId: 'user-1' } },
+      });
+      expect(prisma.emailJob.updateMany).toHaveBeenCalledWith({
+        where: { id: 'job-1', status: 'QUEUED' },
+        data: { status: 'CANCELLED' },
+      });
+    });
+
+    it("throws NotFoundException when not owned by any of the given user's API keys", async () => {
+      prisma.emailJob.findFirst.mockResolvedValue(null);
+
+      await expect(service.cancelForUser('user-1', 'job-1')).rejects.toThrow(
         NotFoundException,
       );
     });

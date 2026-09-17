@@ -130,11 +130,11 @@ export default function ServicesPage() {
     <div className="flex flex-col gap-8">
       <div>
         <h1 className="font-display text-[22px] font-semibold tracking-tight text-fg">
-          Services
+          Routes
         </h1>
         <p className="mt-1 text-sm text-fg-2">
-          Everything reachable behind your keys. Per-service settings land
-          here next.
+          Every route reachable behind your keys, for machine-to-machine
+          integration.
         </p>
       </div>
 

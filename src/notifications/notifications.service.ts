@@ -5,9 +5,11 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
+import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmailDto } from './dto/create-email.dto';
 import { EmailJobResponseDto } from './dto/email-job-response.dto';
+import { EmailJobListResponseDto } from './dto/email-job-list-response.dto';
 import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
 import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
 import { EMAIL_TEMPLATES } from './templates/templates';
@@ -99,7 +101,7 @@ export class NotificationsService {
     apiKeyId: string,
     jobId: string,
   ): Promise<EmailJobResponseDto> {
-    const job = await this.findOwnedJob(apiKeyId, jobId);
+    const job = await this.findOwnedJob({ apiKeyId }, jobId);
     return this.toResponseDto(job);
   }
 
@@ -114,7 +116,65 @@ export class NotificationsService {
    * @returns The job's state after being re-queued
    */
   async retry(apiKeyId: string, jobId: string): Promise<EmailJobResponseDto> {
-    const job = await this.findOwnedJob(apiKeyId, jobId);
+    return this.retryJob({ apiKeyId }, jobId);
+  }
+
+  /**
+   * Re-queues a permanently failed email job owned by any of the given
+   * user's API keys, for the dashboard table's retry action — unlike
+   * `retry`, which only matches the single calling API key, this spans every
+   * key a human owns (including one used to create the job from another
+   * application), matching `findAllForUser`'s scoping.
+   * Throws a NotFoundException per the same ownership rule as getStatus.
+   * Throws a ConflictException if the job isn't in a FAILED state.
+   *
+   * @param userId - Id of the dashboard user, for ownership
+   * @param jobId - Id of the job to retry
+   * @returns The job's state after being re-queued
+   */
+  async retryForUser(
+    userId: string,
+    jobId: string,
+  ): Promise<EmailJobResponseDto> {
+    return this.retryJob({ apiKey: { userId } }, jobId);
+  }
+
+  /**
+   * Cancels an email job that hasn't started processing yet.
+   * Throws a NotFoundException per the same ownership rule as getStatus.
+   * Throws a ConflictException if the job is no longer QUEUED — e.g. it's
+   * already being processed, racing this call.
+   *
+   * @param apiKeyId - Id of the ApiKey making the request, for ownership
+   * @param jobId - Id of the job to cancel
+   */
+  async cancel(apiKeyId: string, jobId: string): Promise<void> {
+    return this.cancelJob({ apiKeyId }, jobId);
+  }
+
+  /**
+   * Cancels an email job owned by any of the given user's API keys, for the
+   * dashboard table's cancel action — see `retryForUser` for why this scopes
+   * differently than `cancel`.
+   * Throws a NotFoundException per the same ownership rule as getStatus.
+   * Throws a ConflictException if the job is no longer QUEUED.
+   *
+   * @param userId - Id of the dashboard user, for ownership
+   * @param jobId - Id of the job to cancel
+   */
+  async cancelForUser(userId: string, jobId: string): Promise<void> {
+    return this.cancelJob({ apiKey: { userId } }, jobId);
+  }
+
+  /**
+   * Shared retry logic behind `retry` and `retryForUser`, which differ only
+   * in how the job's ownership is scoped.
+   */
+  private async retryJob(
+    scope: Prisma.EmailJobWhereInput,
+    jobId: string,
+  ): Promise<EmailJobResponseDto> {
+    const job = await this.findOwnedJob(scope, jobId);
     if (job.status !== 'FAILED') {
       throw new ConflictException(`Cannot retry a job in ${job.status} state`);
     }
@@ -138,16 +198,14 @@ export class NotificationsService {
   }
 
   /**
-   * Cancels an email job that hasn't started processing yet.
-   * Throws a NotFoundException per the same ownership rule as getStatus.
-   * Throws a ConflictException if the job is no longer QUEUED — e.g. it's
-   * already being processed, racing this call.
-   *
-   * @param apiKeyId - Id of the ApiKey making the request, for ownership
-   * @param jobId - Id of the job to cancel
+   * Shared cancel logic behind `cancel` and `cancelForUser`, which differ
+   * only in how the job's ownership is scoped.
    */
-  async cancel(apiKeyId: string, jobId: string): Promise<void> {
-    const job = await this.findOwnedJob(apiKeyId, jobId);
+  private async cancelJob(
+    scope: Prisma.EmailJobWhereInput,
+    jobId: string,
+  ): Promise<void> {
+    const job = await this.findOwnedJob(scope, jobId);
     if (job.status !== 'QUEUED') {
       throw new ConflictException(`Cannot cancel a job in ${job.status} state`);
     }
@@ -166,6 +224,55 @@ export class NotificationsService {
     await this.prisma.emailJob.updateMany({
       where: { id: jobId, status: 'QUEUED' },
       data: { status: 'CANCELLED' },
+    });
+  }
+
+  /**
+   * Lists email jobs queued by any of the given user's API keys, most
+   * recently created first, for the dashboard's notifications listing page.
+   *
+   * @param userId - Id of the dashboard user; `EmailJob` only links to
+   *   `ApiKey`, not `User`, directly, so results are scoped via that relation
+   * @param limit - Max number of rows to return
+   * @param offset - Number of rows to skip, for pagination
+   * @returns A page of the user's email jobs plus the total matching count
+   */
+  async findAllForUser(
+    userId: string,
+    limit: number,
+    offset: number,
+  ): Promise<EmailJobListResponseDto> {
+    return this.listByWhere({ apiKey: { userId } }, limit, offset);
+  }
+
+  /**
+   * Shared pagination/query logic behind `findAllForUser`.
+   *
+   * @param where - Prisma filter scoping results to the caller
+   * @param limit - Max number of rows to return
+   * @param offset - Number of rows to skip, for pagination
+   * @returns A page of matching email jobs plus the total matching count
+   */
+  private async listByWhere(
+    where: Prisma.EmailJobWhereInput,
+    limit: number,
+    offset: number,
+  ): Promise<EmailJobListResponseDto> {
+    const [jobs, total] = await Promise.all([
+      this.prisma.emailJob.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.emailJob.count({ where }),
+    ]);
+
+    return new EmailJobListResponseDto({
+      items: jobs.map((job) => this.toResponseDto(job)),
+      total,
+      limit,
+      offset,
     });
   }
 
@@ -193,15 +300,19 @@ export class NotificationsService {
   }
 
   /**
-   * Finds an EmailJob scoped to the given API key.
-   * Throws a NotFoundException if no matching job exists.
+   * Finds an EmailJob matching the given ownership scope (either a single
+   * `apiKeyId`, for a machine caller, or `{ apiKey: { userId } }`, for a
+   * dashboard caller acting across every key they own).
+   * Throws a NotFoundException if no matching job exists — deliberately not
+   * distinguishing "doesn't exist" from "exists but isn't owned by this
+   * scope", to avoid leaking whether a job id exists under another key.
    */
   private async findOwnedJob(
-    apiKeyId: string,
+    scope: Prisma.EmailJobWhereInput,
     jobId: string,
   ): Promise<EmailJob> {
     const job = await this.prisma.emailJob.findFirst({
-      where: { id: jobId, apiKeyId },
+      where: { id: jobId, ...scope },
     });
     if (!job) {
       throw new NotFoundException('Email job not found');

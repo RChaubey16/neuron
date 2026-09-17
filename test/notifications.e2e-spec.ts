@@ -1,5 +1,6 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { JwtService } from '@nestjs/jwt';
 import { getQueueToken } from '@nestjs/bullmq';
 import request from 'supertest';
 import { App } from 'supertest/types';
@@ -9,12 +10,17 @@ import { EmailProcessor } from './../src/notifications/processors/email.processo
 
 describe('Notifications (e2e)', () => {
   let app: INestApplication<App>;
+  const jwtServiceMock = { verifyAsync: jest.fn() };
+  const dashboardUser = { id: 'user-1', email: 'user@example.com' };
   const prismaMock = {
-    apiKey: { findFirst: jest.fn(), update: jest.fn() },
+    user: { findUniqueOrThrow: jest.fn() },
+    apiKey: { findFirst: jest.fn(), create: jest.fn(), update: jest.fn() },
     usageLog: { create: jest.fn() },
     emailJob: {
       create: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
+      count: jest.fn(),
       update: jest.fn(),
       updateMany: jest.fn(),
     },
@@ -43,6 +49,11 @@ describe('Notifications (e2e)', () => {
     prismaMock.apiKey.update.mockResolvedValue({});
     prismaMock.usageLog.create.mockResolvedValue({});
     emailQueueMock.add.mockResolvedValue({});
+    jwtServiceMock.verifyAsync.mockResolvedValue({
+      sub: dashboardUser.id,
+      email: dashboardUser.email,
+    });
+    prismaMock.user.findUniqueOrThrow.mockResolvedValue(dashboardUser);
 
     // Overriding the 'email' queue token and EmailProcessor entirely
     // (not just their outputs) prevents Nest from ever constructing the
@@ -58,6 +69,8 @@ describe('Notifications (e2e)', () => {
       .useValue(emailQueueMock)
       .overrideProvider(EmailProcessor)
       .useValue({})
+      .overrideProvider(JwtService)
+      .useValue(jwtServiceMock)
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -342,6 +355,163 @@ describe('Notifications (e2e)', () => {
         .expect(409);
 
       expect(emailQueueMock.remove).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /notifications/email (dashboard)', () => {
+    it("lists the caller's own email jobs via the dashboard route, not the ApiKeyGuard", async () => {
+      const listedJob = { ...baseJob, status: 'SENT' };
+      prismaMock.emailJob.findMany.mockResolvedValue([listedJob]);
+      prismaMock.emailJob.count.mockResolvedValue(1);
+
+      const response = await request(app.getHttpServer())
+        .get('/notifications/email')
+        .set('Authorization', 'Bearer valid-token')
+        .expect(200);
+
+      expect(prismaMock.emailJob.findMany).toHaveBeenCalledWith({
+        where: { apiKey: { userId: dashboardUser.id } },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+        skip: 0,
+      });
+      expect(response.body).toMatchObject({
+        items: [{ id: listedJob.id, status: listedJob.status }],
+        total: 1,
+        limit: 20,
+        offset: 0,
+      });
+    });
+
+    it('rejects with no Authorization header', () => {
+      return request(app.getHttpServer())
+        .get('/notifications/email')
+        .expect(401);
+    });
+  });
+
+  describe('POST /notifications/email (dashboard)', () => {
+    it('queues an email from the dashboard via the hidden system key, and reuses it on a second call', async () => {
+      const systemKey = {
+        id: 'system-key-1',
+        userId: dashboardUser.id,
+        isSystemKey: true,
+      };
+      prismaMock.apiKey.findFirst.mockResolvedValue(systemKey);
+      prismaMock.emailJob.create.mockResolvedValue({
+        ...baseJob,
+        apiKeyId: systemKey.id,
+        status: 'QUEUED',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/notifications/email')
+        .set('Authorization', 'Bearer valid-token')
+        .send({
+          to: ['recipient@example.com'],
+          subject: 'Test',
+          body: '<p>Hello</p>',
+        })
+        .expect(202);
+
+      expect(response.body).toMatchObject({ id: baseJob.id, status: 'QUEUED' });
+      expect(prismaMock.apiKey.findFirst).toHaveBeenCalledWith({
+        where: { userId: dashboardUser.id, isSystemKey: true },
+      });
+      expect(prismaMock.apiKey.create).not.toHaveBeenCalled();
+      expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
+        data: {
+          apiKeyId: systemKey.id,
+          service: 'email-notifications',
+          endpoint: '/notifications/email',
+        },
+      });
+    });
+
+    it('rejects with no Authorization header, without touching the DB', async () => {
+      await request(app.getHttpServer())
+        .post('/notifications/email')
+        .send({
+          to: ['recipient@example.com'],
+          subject: 'Test',
+          body: '<p>Hello</p>',
+        })
+        .expect(401);
+
+      expect(prismaMock.emailJob.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /notifications/email/:jobId/retry (dashboard)', () => {
+    const jobId = '44444444-4444-4444-8444-444444444444';
+
+    it("re-queues a FAILED job owned by any of the caller's own API keys", async () => {
+      const failedJob = {
+        ...baseJob,
+        id: jobId,
+        status: 'FAILED',
+        error: 'boom',
+      };
+      prismaMock.emailJob.findFirst.mockResolvedValue(failedJob);
+      prismaMock.emailJob.update.mockResolvedValue({
+        ...failedJob,
+        status: 'QUEUED',
+        error: null,
+      });
+      emailQueueMock.remove.mockResolvedValue(1);
+
+      const response = await request(app.getHttpServer())
+        .post(`/notifications/email/${jobId}/retry`)
+        .set('Authorization', 'Bearer valid-token')
+        .expect(200);
+
+      expect(prismaMock.emailJob.findFirst).toHaveBeenCalledWith({
+        where: { id: jobId, apiKey: { userId: dashboardUser.id } },
+      });
+      expect(response.body).toMatchObject({ status: 'QUEUED' });
+    });
+
+    it('rejects with no Authorization header, without touching the DB', async () => {
+      await request(app.getHttpServer())
+        .post(`/notifications/email/${jobId}/retry`)
+        .expect(401);
+
+      expect(prismaMock.emailJob.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('DELETE /notifications/email/:jobId (dashboard)', () => {
+    const jobId = '55555555-5555-4555-8555-555555555555';
+
+    it("cancels a QUEUED job owned by any of the caller's own API keys", async () => {
+      prismaMock.emailJob.findFirst.mockResolvedValue({
+        ...baseJob,
+        id: jobId,
+        status: 'QUEUED',
+      });
+      emailQueueMock.remove.mockResolvedValue(1);
+      prismaMock.emailJob.updateMany.mockResolvedValue({ count: 1 });
+
+      await request(app.getHttpServer())
+        .delete(`/notifications/email/${jobId}`)
+        .set('Authorization', 'Bearer valid-token')
+        .expect(204);
+
+      expect(prismaMock.emailJob.findFirst).toHaveBeenCalledWith({
+        where: { id: jobId, apiKey: { userId: dashboardUser.id } },
+      });
+      expect(prismaMock.emailJob.updateMany).toHaveBeenCalledWith({
+        where: { id: jobId, status: 'QUEUED' },
+        data: { status: 'CANCELLED' },
+      });
+    });
+
+    it('rejects with no Authorization header, without touching the DB', async () => {
+      await request(app.getHttpServer())
+        .delete(`/notifications/email/${jobId}`)
+        .expect(401);
+
+      expect(prismaMock.emailJob.findFirst).not.toHaveBeenCalled();
     });
   });
 });

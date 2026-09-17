@@ -7,37 +7,43 @@ import {
   HttpStatus,
   Param,
   Post,
+  Query,
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
 import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
+import { DashboardApiKeyGuard } from '../api-keys/guards/dashboard-api-key.guard';
 import { CurrentApiKey } from '../api-keys/decorators/current-api-key.decorator';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { Service } from '../usage/decorators/service.decorator';
 import { UsageLoggingInterceptor } from '../usage/interceptors/usage-logging.interceptor';
 import { NotificationsService } from './notifications.service';
 import { CreateEmailDto } from './dto/create-email.dto';
 import { EmailJobParamsDto } from './dto/email-job-params.dto';
 import { EmailJobResponseDto } from './dto/email-job-response.dto';
+import { EmailJobListResponseDto } from './dto/email-job-list-response.dto';
+import { ListEmailJobsQueryDto } from './dto/list-email-jobs-query.dto';
 import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
 import { TemplateKeyParamsDto } from './dto/template-key-params.dto';
 import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
-import type { ApiKey } from '../../generated/prisma';
+import type { ApiKey, User } from '../../generated/prisma';
 
-@Controller('api/v1/notifications/email')
-@UseGuards(ApiKeyGuard)
-@UseInterceptors(UsageLoggingInterceptor)
+// No class-level @Controller() prefix/guards (unlike this controller's
+// previous shape) — dashboard routes below need to stay unversioned at the
+// root while the machine-facing routes stay versioned under
+// api/v1/notifications/email, so each route declares its own full path and
+// guards, matching ShortUrlController's convention.
+@Controller()
 export class NotificationsController {
   constructor(private readonly notificationsService: NotificationsService) {}
 
-  // @Service() stays per-method (not hoisted to the class) because
-  // UsageLoggingInterceptor reads it via `reflector.get(SERVICE_KEY,
-  // context.getHandler())`, which only inspects the method, not the
-  // controller class.
-
-  @Post()
+  @Post('api/v1/notifications/email')
   @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(ApiKeyGuard)
   @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   send(
     @CurrentApiKey() apiKey: ApiKey,
@@ -50,16 +56,20 @@ export class NotificationsController {
   // Express matches routes in registration order, not by specificity, so
   // 'templates' would otherwise be captured as a (non-UUID, 400) jobId.
 
-  @Get('templates')
+  @Get('api/v1/notifications/email/templates')
+  @UseGuards(ApiKeyGuard)
   @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   listTemplates(): EmailTemplateSummaryDto[] {
     return this.notificationsService.listTemplates();
   }
 
-  @Post('templates/:templateKey/send')
+  @Post('api/v1/notifications/email/templates/:templateKey/send')
   @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(ApiKeyGuard)
   @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   sendTemplated(
     @CurrentApiKey() apiKey: ApiKey,
@@ -73,8 +83,10 @@ export class NotificationsController {
     );
   }
 
-  @Get(':jobId')
+  @Get('api/v1/notifications/email/:jobId')
+  @UseGuards(ApiKeyGuard)
   @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   @Throttle({ default: { limit: 30, ttl: 60_000 } })
   getStatus(
     @CurrentApiKey() apiKey: ApiKey,
@@ -83,9 +95,11 @@ export class NotificationsController {
     return this.notificationsService.getStatus(apiKey.id, params.jobId);
   }
 
-  @Post(':jobId/retry')
+  @Post('api/v1/notifications/email/:jobId/retry')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(ApiKeyGuard)
   @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   retry(
     @CurrentApiKey() apiKey: ApiKey,
@@ -94,14 +108,75 @@ export class NotificationsController {
     return this.notificationsService.retry(apiKey.id, params.jobId);
   }
 
-  @Delete(':jobId')
+  @Delete('api/v1/notifications/email/:jobId')
   @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(ApiKeyGuard)
   @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
   @Throttle({ default: { limit: 10, ttl: 60_000 } })
   cancel(
     @CurrentApiKey() apiKey: ApiKey,
     @Param() params: EmailJobParamsDto,
   ): Promise<void> {
     return this.notificationsService.cancel(apiKey.id, params.jobId);
+  }
+
+  // Dashboard routes (JwtAuthGuard, unversioned) — mirror
+  // ShortUrlController's GET/POST '/short-url' pair.
+
+  @Get('notifications/email')
+  @UseGuards(JwtAuthGuard)
+  findAllForUser(
+    @CurrentUser() user: User,
+    @Query() query: ListEmailJobsQueryDto,
+  ): Promise<EmailJobListResponseDto> {
+    return this.notificationsService.findAllForUser(
+      user.id,
+      query.limit,
+      query.offset,
+    );
+  }
+
+  // Dashboard-native counterpart to POST /api/v1/notifications/email:
+  // bridges a logged-in human's session JWT to the same apiKeyId-scoped
+  // service method via DashboardApiKeyGuard's hidden per-user system key
+  // (see docs/2026-09-16-dashboard-service-usage-design.md).
+  @Post('notifications/email')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(JwtAuthGuard, DashboardApiKeyGuard)
+  @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
+  sendFromDashboard(
+    @CurrentApiKey() apiKey: ApiKey,
+    @Body() dto: CreateEmailDto,
+  ): Promise<EmailJobResponseDto> {
+    return this.notificationsService.queueEmail(apiKey.id, dto);
+  }
+
+  // Dashboard actions on an existing job. No DashboardApiKeyGuard/@Service()/
+  // UsageLoggingInterceptor here — unlike sendFromDashboard, these don't act
+  // through the hidden system key, since a dashboard user should be able to
+  // retry/cancel a job created by any of their real API keys too, not just
+  // dashboard-originated ones. UsageLoggingInterceptor would be a no-op
+  // anyway with no request.apiKey attached.
+
+  @Post('notifications/email/:jobId/retry')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(JwtAuthGuard)
+  retryFromDashboard(
+    @CurrentUser() user: User,
+    @Param() params: EmailJobParamsDto,
+  ): Promise<EmailJobResponseDto> {
+    return this.notificationsService.retryForUser(user.id, params.jobId);
+  }
+
+  @Delete('notifications/email/:jobId')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @UseGuards(JwtAuthGuard)
+  cancelFromDashboard(
+    @CurrentUser() user: User,
+    @Param() params: EmailJobParamsDto,
+  ): Promise<void> {
+    return this.notificationsService.cancelForUser(user.id, params.jobId);
   }
 }

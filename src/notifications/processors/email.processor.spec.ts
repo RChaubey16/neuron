@@ -10,12 +10,13 @@ import { PrismaService } from '../../prisma/prisma.service';
 describe('EmailProcessor', () => {
   let processor: EmailProcessor;
   let resend: { emails: { send: jest.Mock } };
-  let prisma: { emailJob: { update: jest.Mock } };
+  let prisma: { emailJob: { update: jest.Mock; updateMany: jest.Mock } };
 
   beforeEach(async () => {
     resend = { emails: { send: jest.fn() } };
-    prisma = { emailJob: { update: jest.fn() } };
+    prisma = { emailJob: { update: jest.fn(), updateMany: jest.fn() } };
     prisma.emailJob.update.mockResolvedValue({});
+    prisma.emailJob.updateMany.mockResolvedValue({ count: 1 });
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -97,13 +98,13 @@ describe('EmailProcessor', () => {
   });
 
   describe('onActive', () => {
-    it('marks the EmailJob PROCESSING', async () => {
+    it('marks the EmailJob PROCESSING only if it is still QUEUED', async () => {
       const job = { id: 'job-1' } as Job<CreateEmailDto>;
 
       await processor.onActive(job);
 
-      expect(prisma.emailJob.update).toHaveBeenCalledWith({
-        where: { id: 'job-1' },
+      expect(prisma.emailJob.updateMany).toHaveBeenCalledWith({
+        where: { id: 'job-1', status: 'QUEUED' },
         data: { status: 'PROCESSING' },
       });
     });
@@ -113,14 +114,16 @@ describe('EmailProcessor', () => {
 
       await processor.onActive(job);
 
-      expect(prisma.emailJob.update).not.toHaveBeenCalled();
+      expect(prisma.emailJob.updateMany).not.toHaveBeenCalled();
     });
 
     it('logs an error when the update fails, without throwing (BullMQ never catches a listener rejection)', async () => {
       const errorSpy = jest
         .spyOn(Logger.prototype, 'error')
         .mockImplementation();
-      prisma.emailJob.update.mockRejectedValue(new Error('connection reset'));
+      prisma.emailJob.updateMany.mockRejectedValue(
+        new Error('connection reset'),
+      );
       const job = { id: 'job-1' } as Job<CreateEmailDto>;
 
       await expect(processor.onActive(job)).resolves.toBeUndefined();

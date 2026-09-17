@@ -80,6 +80,32 @@ export type ShortUrlList = {
   offset: number;
 };
 
+export type EmailJobStatus =
+  | 'QUEUED'
+  | 'PROCESSING'
+  | 'SENT'
+  | 'FAILED'
+  | 'CANCELLED';
+
+export type EmailJob = {
+  id: string;
+  status: EmailJobStatus;
+  to: string[];
+  subject: string;
+  error: string | null;
+  attemptsMade: number;
+  resendId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type EmailJobList = {
+  items: EmailJob[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export const api = {
   getMe: () => apiFetch<User>('/me'),
 
@@ -109,6 +135,28 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ originalUrl }),
     }),
+
+  listEmailJobs: (params?: { limit?: number; offset?: number }) => {
+    const query = new URLSearchParams();
+    if (params?.limit !== undefined) query.set('limit', String(params.limit));
+    if (params?.offset !== undefined) query.set('offset', String(params.offset));
+    const qs = query.toString();
+    return apiFetch<EmailJobList>(`/notifications/email${qs ? `?${qs}` : ''}`);
+  },
+
+  sendEmail: (payload: { to: string[]; subject: string; body: string }) =>
+    apiFetch<EmailJob>('/notifications/email', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  retryEmail: (jobId: string) =>
+    apiFetch<EmailJob>(`/notifications/email/${jobId}/retry`, {
+      method: 'POST',
+    }),
+
+  cancelEmail: (jobId: string) =>
+    apiFetch<void>(`/notifications/email/${jobId}`, { method: 'DELETE' }),
 };
 
 export function googleSignInUrl(): string {

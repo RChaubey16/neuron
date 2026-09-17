@@ -69,6 +69,18 @@ export class EmailProcessor extends WorkerHost {
    * never awaits or catches a listener's returned promise. Confirmed via a
    * real Postgres run: an EmailJob can otherwise get permanently stuck out
    * of sync with BullMQ's own (correct) job state, with zero log trail.
+   * Guarded to only transition from QUEUED (`updateMany` + a `status`
+   * filter, not a plain `update`) rather than unconditionally overwriting
+   * `status`: `onActive` and `onCompleted` are independent, unawaited
+   * writes with no ordering guarantee between them, and for a fast job
+   * (Resend often responds in well under a second) their two `await
+   * prisma.emailJob.update(...)` calls can resolve in either order —
+   * reproduced against the real Supabase DB as a job left stuck on
+   * PROCESSING despite already carrying the `resendId` `onCompleted` had
+   * set, because `onActive`'s unconditional write landed after
+   * `onCompleted`'s and silently reverted `status` alone (it never touches
+   * `resendId`). The guard makes `onActive` a no-op once the job has
+   * already moved past QUEUED, so write order no longer matters.
    */
   @OnWorkerEvent('active')
   async onActive(job: Job<CreateEmailDto>): Promise<void> {
@@ -76,7 +88,10 @@ export class EmailProcessor extends WorkerHost {
       return;
     }
     await this.prisma.emailJob
-      .update({ where: { id: job.id }, data: { status: 'PROCESSING' } })
+      .updateMany({
+        where: { id: job.id, status: 'QUEUED' },
+        data: { status: 'PROCESSING' },
+      })
       .catch((error: unknown) => {
         this.logger.error(
           `Failed to sync EmailJob ${job.id} to PROCESSING`,

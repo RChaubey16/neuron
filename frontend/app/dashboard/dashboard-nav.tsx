@@ -9,18 +9,40 @@ import {
   LineChart,
   Link2,
   LogOut,
+  Mail,
   Menu,
   Settings,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 
-const NAV_ITEMS = [
-  { href: '/dashboard', label: 'Keys', icon: KeyRound },
-  { href: '/dashboard/urls', label: 'URLs', icon: Link2 },
-  { href: '/dashboard/usage', label: 'Usage', icon: LineChart },
-  { href: '/dashboard/services', label: 'Services', icon: Blocks },
-  { href: '/dashboard/settings', label: 'Settings', icon: Settings },
+// Grouped into the two sections the dashboard is organized around: using a
+// service directly vs. managing machine access to it. `Routes` (formerly
+// labeled "Services") lives under API now that "Services" names the group
+// of usable-in-browser services instead.
+const NAV_GROUPS = [
+  {
+    label: 'Services',
+    items: [
+      { href: '/dashboard/urls', label: 'URLs', icon: Link2 },
+      { href: '/dashboard/notifications', label: 'Notifications', icon: Mail },
+    ],
+  },
+  {
+    label: 'API',
+    items: [
+      { href: '/dashboard', label: 'Keys', icon: KeyRound },
+      { href: '/dashboard/usage', label: 'Usage', icon: LineChart },
+      { href: '/dashboard/services', label: 'Routes', icon: Blocks },
+    ],
+  },
 ] as const;
+
+const SETTINGS_ITEM = {
+  href: '/dashboard/settings',
+  label: 'Settings',
+  icon: Settings,
+} as const;
 
 function useActivePath() {
   const pathname = usePathname();
@@ -41,6 +63,36 @@ function Brand() {
   );
 }
 
+function NavLink({
+  href,
+  label,
+  icon: Icon,
+  active,
+  onNavigate,
+}: {
+  href: string;
+  label: string;
+  icon: LucideIcon;
+  active: boolean;
+  onNavigate?: () => void;
+}) {
+  return (
+    <Link
+      href={href}
+      aria-current={active ? 'page' : undefined}
+      onClick={onNavigate}
+      className={`flex items-center gap-2.5 border-l-2 py-2 pr-4 pl-[14px] text-[13px] font-medium ${
+        active
+          ? 'border-accent bg-accent-soft text-accent'
+          : 'border-transparent text-fg-2 hover:border-border-strong hover:text-fg'
+      }`}
+    >
+      <Icon className="h-4 w-4" />
+      {label}
+    </Link>
+  );
+}
+
 function NavLinks({
   isActive,
   onNavigate,
@@ -49,26 +101,33 @@ function NavLinks({
   onNavigate?: () => void;
 }) {
   return (
-    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto py-2">
-      {NAV_ITEMS.map((item) => {
-        const active = isActive(item.href);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? 'page' : undefined}
-            onClick={onNavigate}
-            className={`flex items-center gap-2.5 border-l-2 py-2 pr-4 pl-[14px] text-[13px] font-medium ${
-              active
-                ? 'border-accent bg-accent-soft text-accent'
-                : 'border-transparent text-fg-2 hover:border-border-strong hover:text-fg'
-            }`}
-          >
-            <item.icon className="h-4 w-4" />
-            {item.label}
-          </Link>
-        );
-      })}
+    <nav className="flex flex-1 flex-col overflow-y-auto py-2">
+      {NAV_GROUPS.map((group) => (
+        <div key={group.label} className="flex flex-col gap-0.5 py-2 first:pt-0">
+          <span className="px-4 pb-1 text-[11px] font-semibold tracking-wide text-fg-3">
+            {group.label.toUpperCase()}
+          </span>
+          {group.items.map((item) => (
+            <NavLink
+              key={item.href}
+              href={item.href}
+              label={item.label}
+              icon={item.icon}
+              active={isActive(item.href)}
+              onNavigate={onNavigate}
+            />
+          ))}
+        </div>
+      ))}
+      <div className="mt-auto flex flex-col gap-0.5 border-t border-border pt-2">
+        <NavLink
+          href={SETTINGS_ITEM.href}
+          label={SETTINGS_ITEM.label}
+          icon={SETTINGS_ITEM.icon}
+          active={isActive(SETTINGS_ITEM.href)}
+          onNavigate={onNavigate}
+        />
+      </div>
     </nav>
   );
 }
