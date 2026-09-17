@@ -85,6 +85,7 @@ describe('ShortUrl (e2e)', () => {
     expect(body.originalUrl).toBe('https://example.com/path');
     expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
       data: {
+        userId: 'user-1',
         apiKeyId: 'key-1',
         service: 'url-shortener',
         endpoint: '/api/v1/short-url/shorten',
@@ -128,6 +129,7 @@ describe('ShortUrl (e2e)', () => {
     });
     expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
       data: {
+        userId: 'user-1',
         apiKeyId: 'key-1',
         service: 'url-shortener',
         endpoint: '/api/v1/short-url',
@@ -169,7 +171,7 @@ describe('ShortUrl (e2e)', () => {
       .expect(200);
 
     expect(prismaMock.shortUrl.findMany).toHaveBeenCalledWith({
-      where: { apiKey: { userId: dashboardUser.id } },
+      where: { userId: dashboardUser.id },
       orderBy: { createdAt: 'desc' },
       take: 20,
       skip: 0,
@@ -210,13 +212,7 @@ describe('ShortUrl (e2e)', () => {
     return request(app.getHttpServer()).get('/short-url').expect(401);
   });
 
-  it('shortens a URL from the dashboard via the hidden system key, and reuses it on a second call', async () => {
-    const systemKey = {
-      id: 'system-key-1',
-      userId: dashboardUser.id,
-      isSystemKey: true,
-    };
-    prismaMock.apiKey.findFirst.mockResolvedValue(systemKey);
+  it("shortens a URL from the dashboard using the caller's userId directly, with no ApiKey lookup at all", async () => {
     prismaMock.shortUrl.create.mockImplementation(
       ({ data }: { data: Record<string, unknown> }) =>
         Promise.resolve({
@@ -235,13 +231,12 @@ describe('ShortUrl (e2e)', () => {
 
     const body = response.body as { code: string; originalUrl: string };
     expect(body.originalUrl).toBe('https://example.com/from-dashboard');
-    expect(prismaMock.apiKey.findFirst).toHaveBeenCalledWith({
-      where: { userId: dashboardUser.id, isSystemKey: true },
-    });
+    expect(prismaMock.apiKey.findFirst).not.toHaveBeenCalled();
     expect(prismaMock.apiKey.create).not.toHaveBeenCalled();
     expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
       data: {
-        apiKeyId: 'system-key-1',
+        userId: dashboardUser.id,
+        apiKeyId: null,
         service: 'url-shortener',
         endpoint: '/short-url',
       },

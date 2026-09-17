@@ -109,6 +109,7 @@ describe('Notifications (e2e)', () => {
       expect(response.body).toMatchObject({ id: 'job-1', status: 'QUEUED' });
       expect(prismaMock.emailJob.create).toHaveBeenCalledWith({
         data: {
+          userId: 'user-1',
           apiKeyId: 'key-1',
           to: ['recipient@example.com'],
           subject: 'Test',
@@ -126,6 +127,7 @@ describe('Notifications (e2e)', () => {
       );
       expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
         data: {
+          userId: 'user-1',
           apiKeyId: 'key-1',
           service: 'email-notifications',
           endpoint: '/api/v1/notifications/email',
@@ -198,6 +200,7 @@ describe('Notifications (e2e)', () => {
       });
       expect(prismaMock.emailJob.create).toHaveBeenCalledWith({
         data: {
+          userId: 'user-1',
           apiKeyId: 'key-1',
           to: ['recipient@example.com'],
           subject: 'Welcome to Neuron, Ada!',
@@ -370,7 +373,7 @@ describe('Notifications (e2e)', () => {
         .expect(200);
 
       expect(prismaMock.emailJob.findMany).toHaveBeenCalledWith({
-        where: { apiKey: { userId: dashboardUser.id } },
+        where: { userId: dashboardUser.id },
         orderBy: { createdAt: 'desc' },
         take: 20,
         skip: 0,
@@ -391,16 +394,9 @@ describe('Notifications (e2e)', () => {
   });
 
   describe('POST /notifications/email (dashboard)', () => {
-    it('queues an email from the dashboard via the hidden system key, and reuses it on a second call', async () => {
-      const systemKey = {
-        id: 'system-key-1',
-        userId: dashboardUser.id,
-        isSystemKey: true,
-      };
-      prismaMock.apiKey.findFirst.mockResolvedValue(systemKey);
+    it("queues an email from the dashboard using the caller's userId directly, with no ApiKey lookup at all", async () => {
       prismaMock.emailJob.create.mockResolvedValue({
         ...baseJob,
-        apiKeyId: systemKey.id,
         status: 'QUEUED',
       });
 
@@ -415,13 +411,12 @@ describe('Notifications (e2e)', () => {
         .expect(202);
 
       expect(response.body).toMatchObject({ id: baseJob.id, status: 'QUEUED' });
-      expect(prismaMock.apiKey.findFirst).toHaveBeenCalledWith({
-        where: { userId: dashboardUser.id, isSystemKey: true },
-      });
+      expect(prismaMock.apiKey.findFirst).not.toHaveBeenCalled();
       expect(prismaMock.apiKey.create).not.toHaveBeenCalled();
       expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
         data: {
-          apiKeyId: systemKey.id,
+          userId: dashboardUser.id,
+          apiKeyId: null,
           service: 'email-notifications',
           endpoint: '/notifications/email',
         },
@@ -466,7 +461,7 @@ describe('Notifications (e2e)', () => {
         .expect(200);
 
       expect(prismaMock.emailJob.findFirst).toHaveBeenCalledWith({
-        where: { id: jobId, apiKey: { userId: dashboardUser.id } },
+        where: { id: jobId, userId: dashboardUser.id },
       });
       expect(response.body).toMatchObject({ status: 'QUEUED' });
     });
@@ -498,7 +493,7 @@ describe('Notifications (e2e)', () => {
         .expect(204);
 
       expect(prismaMock.emailJob.findFirst).toHaveBeenCalledWith({
-        where: { id: jobId, apiKey: { userId: dashboardUser.id } },
+        where: { id: jobId, userId: dashboardUser.id },
       });
       expect(prismaMock.emailJob.updateMany).toHaveBeenCalledWith({
         where: { id: jobId, status: 'QUEUED' },
