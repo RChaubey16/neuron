@@ -129,14 +129,14 @@ describe('ShortUrlService', () => {
           }),
       );
 
-      await service.create(
+      const result = await service.create(
         { userId: 'user-1' },
         { originalUrl: 'https://example.com' },
       );
 
       expect(prisma.shortUrl.create).toHaveBeenCalledWith({
         data: {
-          code: expect.any(String),
+          code: result.code,
           originalUrl: 'https://example.com',
           userId: 'user-1',
           apiKeyId: undefined,

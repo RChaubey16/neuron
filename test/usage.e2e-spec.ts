@@ -86,6 +86,7 @@ describe('Usage (e2e)', () => {
 
     expect(prismaMock.usageLog.create).toHaveBeenCalledWith({
       data: {
+        userId: 'user-1',
         apiKeyId: 'key-1',
         service: 'test-service',
         endpoint: '/test-service',
