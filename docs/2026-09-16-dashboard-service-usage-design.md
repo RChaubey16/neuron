@@ -1,5 +1,7 @@
 # Dashboard-native service usage — design
 
+**Superseded by `docs/2026-09-17-direct-ownership-design.md`** — the hidden system-key mechanism this document designs was later removed; see that doc for why and what replaced it.
+
 ## Goal
 
 Today Neuron's services (URL shortener, Notifications) are only reachable by
