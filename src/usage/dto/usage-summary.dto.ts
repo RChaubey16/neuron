@@ -1,6 +1,10 @@
 import { Expose } from 'class-transformer';
 
-/** One row of the caller's usage aggregate: call count for a service/day/key combination. */
+/**
+ * One row of the caller's usage aggregate: call count for a
+ * service/day/key combination. `apiKeyId` is null for a group of
+ * dashboard-native calls made with no API key.
+ */
 export class UsageSummaryDto {
   @Expose()
   service: string;
@@ -9,7 +13,7 @@ export class UsageSummaryDto {
   date: string;
 
   @Expose()
-  apiKeyId: string;
+  apiKeyId: string | null;
 
   @Expose()
   count: number;
