@@ -34,15 +34,16 @@ export class NotificationsService {
    * of failing fast (known gap, not yet fixed; see CLAUDE.md's gotchas).
    * The EmailJob row would be created and left QUEUED in that case.
    *
-   * @param apiKeyId - Id of the ApiKey making the request, for ownership
+   * @param owner - Id of the owning user, plus the ApiKey id when a machine
+   *   made the request (omitted for a dashboard-native call)
    * @param dto - Validated recipients/subject/body payload
    * @returns The created job's current state
    */
   async queueEmail(
-    apiKeyId: string,
+    owner: { userId: string; apiKeyId?: string },
     dto: CreateEmailDto,
   ): Promise<EmailJobResponseDto> {
-    return this.createAndQueueJob(apiKeyId, dto);
+    return this.createAndQueueJob(owner, dto);
   }
 
   /**
@@ -57,13 +58,14 @@ export class NotificationsService {
    * need no template-awareness, and editing a template's source later
    * can't retroactively change an already-queued job's content.
    *
-   * @param apiKeyId - Id of the ApiKey making the request, for ownership
+   * @param owner - Id of the owning user, plus the ApiKey id when a machine
+   *   made the request (omitted for a dashboard-native call)
    * @param templateKey - Key of the template to render, from EMAIL_TEMPLATES
    * @param dto - Recipients and template variable values
    * @returns The created job's current state
    */
   async sendTemplatedEmail(
-    apiKeyId: string,
+    owner: { userId: string; apiKeyId?: string },
     templateKey: string,
     dto: SendTemplatedEmailDto,
   ): Promise<EmailJobResponseDto> {
@@ -73,7 +75,7 @@ export class NotificationsService {
     }
 
     const { subject, body } = renderTemplate(template, dto.variables);
-    return this.createAndQueueJob(apiKeyId, { to: dto.to, subject, body });
+    return this.createAndQueueJob(owner, { to: dto.to, subject, body });
   }
 
   /** Lists the available email templates and the variables each one requires, without exposing their subject/body copy. */
@@ -120,11 +122,10 @@ export class NotificationsService {
   }
 
   /**
-   * Re-queues a permanently failed email job owned by any of the given
-   * user's API keys, for the dashboard table's retry action — unlike
-   * `retry`, which only matches the single calling API key, this spans every
-   * key a human owns (including one used to create the job from another
-   * application), matching `findAllForUser`'s scoping.
+   * Re-queues a permanently failed email job owned by the given user, for
+   * the dashboard table's retry action — unlike `retry`, which only matches
+   * a single calling API key, this spans every job the user owns regardless
+   * of which key (or none) created it, matching `findAllForUser`'s scoping.
    * Throws a NotFoundException per the same ownership rule as getStatus.
    * Throws a ConflictException if the job isn't in a FAILED state.
    *
@@ -136,7 +137,7 @@ export class NotificationsService {
     userId: string,
     jobId: string,
   ): Promise<EmailJobResponseDto> {
-    return this.retryJob({ apiKey: { userId } }, jobId);
+    return this.retryJob({ userId }, jobId);
   }
 
   /**
@@ -153,9 +154,9 @@ export class NotificationsService {
   }
 
   /**
-   * Cancels an email job owned by any of the given user's API keys, for the
-   * dashboard table's cancel action — see `retryForUser` for why this scopes
-   * differently than `cancel`.
+   * Cancels an email job owned by the given user, for the dashboard table's
+   * cancel action — see `retryForUser` for why this scopes differently than
+   * `cancel`.
    * Throws a NotFoundException per the same ownership rule as getStatus.
    * Throws a ConflictException if the job is no longer QUEUED.
    *
@@ -163,7 +164,7 @@ export class NotificationsService {
    * @param jobId - Id of the job to cancel
    */
   async cancelForUser(userId: string, jobId: string): Promise<void> {
-    return this.cancelJob({ apiKey: { userId } }, jobId);
+    return this.cancelJob({ userId }, jobId);
   }
 
   /**
@@ -228,11 +229,11 @@ export class NotificationsService {
   }
 
   /**
-   * Lists email jobs queued by any of the given user's API keys, most
-   * recently created first, for the dashboard's notifications listing page.
+   * Lists email jobs owned by the given user, most recently created first,
+   * for the dashboard's notifications listing page. Spans every job the
+   * user owns regardless of which key (or none) created it.
    *
-   * @param userId - Id of the dashboard user; `EmailJob` only links to
-   *   `ApiKey`, not `User`, directly, so results are scoped via that relation
+   * @param userId - Id of the dashboard user
    * @param limit - Max number of rows to return
    * @param offset - Number of rows to skip, for pagination
    * @returns A page of the user's email jobs plus the total matching count
@@ -242,7 +243,7 @@ export class NotificationsService {
     limit: number,
     offset: number,
   ): Promise<EmailJobListResponseDto> {
-    return this.listByWhere({ apiKey: { userId } }, limit, offset);
+    return this.listByWhere({ userId }, limit, offset);
   }
 
   /**
@@ -282,12 +283,13 @@ export class NotificationsService {
    * (sendTemplatedEmail) so the two entry points can never drift apart.
    */
   private async createAndQueueJob(
-    apiKeyId: string,
+    owner: { userId: string; apiKeyId?: string },
     email: { to: string[]; subject: string; body: string },
   ): Promise<EmailJobResponseDto> {
     const job = await this.prisma.emailJob.create({
       data: {
-        apiKeyId,
+        userId: owner.userId,
+        apiKeyId: owner.apiKeyId,
         to: email.to,
         subject: email.subject,
         body: email.body,
@@ -301,8 +303,8 @@ export class NotificationsService {
 
   /**
    * Finds an EmailJob matching the given ownership scope (either a single
-   * `apiKeyId`, for a machine caller, or `{ apiKey: { userId } }`, for a
-   * dashboard caller acting across every key they own).
+   * `apiKeyId`, for a machine caller, or `{ userId }`, for a dashboard
+   * caller acting across every job they own regardless of key).
    * Throws a NotFoundException if no matching job exists — deliberately not
    * distinguishing "doesn't exist" from "exists but isn't owned by this
    * scope", to avoid leaking whether a job id exists under another key.

@@ -71,10 +71,14 @@ describe('NotificationsService', () => {
         body: '<p>Hello</p>',
       };
 
-      const result = await service.queueEmail('key-1', dto);
+      const result = await service.queueEmail(
+        { userId: 'user-1', apiKeyId: 'key-1' },
+        dto,
+      );
 
       expect(prisma.emailJob.create).toHaveBeenCalledWith({
         data: {
+          userId: 'user-1',
           apiKeyId: 'key-1',
           to: dto.to,
           subject: dto.subject,
@@ -91,6 +95,26 @@ describe('NotificationsService', () => {
       expect(result.id).toBe('job-1');
       expect(result.status).toBe('QUEUED');
     });
+
+    it('creates a dashboard-originated job with no apiKeyId', async () => {
+      prisma.emailJob.create.mockResolvedValue(job);
+      queue.add.mockResolvedValue({});
+
+      await service.queueEmail(
+        { userId: 'user-1' },
+        { to: ['recipient@example.com'], subject: 'Hi', body: '<p>Hello</p>' },
+      );
+
+      expect(prisma.emailJob.create).toHaveBeenCalledWith({
+        data: {
+          userId: 'user-1',
+          apiKeyId: undefined,
+          to: ['recipient@example.com'],
+          subject: 'Hi',
+          body: '<p>Hello</p>',
+        },
+      });
+    });
   });
 
   describe('sendTemplatedEmail', () => {
@@ -102,13 +126,15 @@ describe('NotificationsService', () => {
       });
       queue.add.mockResolvedValue({});
 
-      const result = await service.sendTemplatedEmail('key-1', 'welcome', {
-        to: ['recipient@example.com'],
-        variables: { name: 'Ada', productName: 'Neuron' },
-      });
+      const result = await service.sendTemplatedEmail(
+        { userId: 'user-1', apiKeyId: 'key-1' },
+        'welcome',
+        { to: ['recipient@example.com'], variables: { name: 'Ada', productName: 'Neuron' } },
+      );
 
       expect(prisma.emailJob.create).toHaveBeenCalledWith({
         data: {
+          userId: 'user-1',
           apiKeyId: 'key-1',
           to: ['recipient@example.com'],
           subject: 'Welcome to Neuron, Ada!',
@@ -129,20 +155,28 @@ describe('NotificationsService', () => {
 
     it('throws NotFoundException for an unknown template key', async () => {
       await expect(
-        service.sendTemplatedEmail('key-1', 'does-not-exist', {
-          to: ['recipient@example.com'],
-          variables: {},
-        }),
+        service.sendTemplatedEmail(
+          { userId: 'user-1', apiKeyId: 'key-1' },
+          'does-not-exist',
+          {
+            to: ['recipient@example.com'],
+            variables: {},
+          },
+        ),
       ).rejects.toThrow(NotFoundException);
       expect(prisma.emailJob.create).not.toHaveBeenCalled();
     });
 
     it('throws BadRequestException when variables do not match the template', async () => {
       await expect(
-        service.sendTemplatedEmail('key-1', 'welcome', {
-          to: ['recipient@example.com'],
-          variables: { name: 'Ada' },
-        }),
+        service.sendTemplatedEmail(
+          { userId: 'user-1', apiKeyId: 'key-1' },
+          'welcome',
+          {
+            to: ['recipient@example.com'],
+            variables: { name: 'Ada' },
+          },
+        ),
       ).rejects.toThrow(BadRequestException);
       expect(prisma.emailJob.create).not.toHaveBeenCalled();
     });
@@ -156,13 +190,13 @@ describe('NotificationsService', () => {
       const result = await service.findAllForUser('user-1', 20, 0);
 
       expect(prisma.emailJob.findMany).toHaveBeenCalledWith({
-        where: { apiKey: { userId: 'user-1' } },
+        where: { userId: 'user-1' },
         orderBy: { createdAt: 'desc' },
         take: 20,
         skip: 0,
       });
       expect(prisma.emailJob.count).toHaveBeenCalledWith({
-        where: { apiKey: { userId: 'user-1' } },
+        where: { userId: 'user-1' },
       });
       expect(result).toEqual({
         items: [
@@ -308,7 +342,7 @@ describe('NotificationsService', () => {
       const result = await service.retryForUser('user-1', 'job-1');
 
       expect(prisma.emailJob.findFirst).toHaveBeenCalledWith({
-        where: { id: 'job-1', apiKey: { userId: 'user-1' } },
+        where: { id: 'job-1', userId: 'user-1' },
       });
       expect(result.status).toBe('QUEUED');
     });
@@ -377,7 +411,7 @@ describe('NotificationsService', () => {
       await service.cancelForUser('user-1', 'job-1');
 
       expect(prisma.emailJob.findFirst).toHaveBeenCalledWith({
-        where: { id: 'job-1', apiKey: { userId: 'user-1' } },
+        where: { id: 'job-1', userId: 'user-1' },
       });
       expect(prisma.emailJob.updateMany).toHaveBeenCalledWith({
         where: { id: 'job-1', status: 'QUEUED' },
