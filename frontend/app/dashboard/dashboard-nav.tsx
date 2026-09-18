@@ -81,7 +81,7 @@ function NavLink({
       href={href}
       aria-current={active ? 'page' : undefined}
       onClick={onNavigate}
-      className={`flex items-center gap-2.5 border-l-2 py-2 pr-4 pl-[14px] text-[13px] font-medium ${
+      className={`flex items-center gap-2.5 border-r-2 py-2 pr-[14px] pl-4 text-[13px] font-medium ${
         active
           ? 'border-accent bg-accent-soft text-accent'
           : 'border-transparent text-fg-2 hover:border-border-strong hover:text-fg'
