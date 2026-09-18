@@ -4,8 +4,8 @@ import { IsInt, Max, Min } from 'class-validator';
 export const DEFAULT_LIST_LIMIT = 20;
 export const MAX_LIST_LIMIT = 100;
 
-/** Query params for `GET /notifications/email`. */
-export class ListEmailJobsQueryDto {
+/** Shared `limit`/`offset` query params for a paginated list endpoint. */
+export class PaginationQueryDto {
   @Type(() => Number)
   @IsInt()
   @Min(1)

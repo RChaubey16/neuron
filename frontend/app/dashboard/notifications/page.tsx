@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { api, type EmailJob, type EmailJobStatus } from '@/lib/api';
-import { Ban, Mail, Plus, RefreshCw, RotateCcw, TriangleAlert } from 'lucide-react';
+import { usePaginatedList } from '@/lib/use-paginated-list';
+import { Ban, Mail, Plus, RotateCcw, TriangleAlert } from 'lucide-react';
+import { QueryStateCard } from '../query-state-card';
+import { TableSkeleton } from '../table-skeleton';
 
 const PAGE_SIZE = 20;
-// Mirrors the backend's MAX_LIST_LIMIT (src/notifications/dto/list-email-jobs-query.dto.ts).
+// Mirrors the backend's MAX_LIST_LIMIT (src/common/dto/pagination-query.dto.ts).
 const MAX_LIMIT = 100;
 
 function SendEmailForm() {
@@ -211,15 +214,22 @@ function JobsTable({
 }
 
 export default function NotificationsPage() {
-  // "Load more" grows `limit` rather than paging via `offset`, so the
-  // response's `items` is always the full accumulated list — no client-side
-  // merging of separate pages needed. Mirrors /dashboard/urls's pagination.
-  const [limit, setLimit] = useState(PAGE_SIZE);
   const queryClient = useQueryClient();
 
-  const jobsQuery = useQuery({
-    queryKey: ['email-jobs', limit],
-    queryFn: () => api.listEmailJobs({ limit, offset: 0 }),
+  const {
+    query: jobsQuery,
+    items,
+    total,
+    isLoading,
+    isError,
+    isEmpty,
+    canLoadMore,
+    loadMore,
+  } = usePaginatedList({
+    queryKey: 'email-jobs',
+    queryFn: api.listEmailJobs,
+    pageSize: PAGE_SIZE,
+    maxLimit: MAX_LIMIT,
   });
 
   const retryMutation = useMutation({
@@ -231,13 +241,6 @@ export default function NotificationsPage() {
     mutationFn: (jobId: string) => api.cancelEmail(jobId),
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['email-jobs'] }),
   });
-
-  const items = jobsQuery.data?.items ?? [];
-  const total = jobsQuery.data?.total ?? 0;
-  const isLoading = jobsQuery.status === 'pending';
-  const isError = jobsQuery.status === 'error';
-  const isEmpty = jobsQuery.status === 'success' && items.length === 0;
-  const canLoadMore = items.length < total && limit < MAX_LIMIT;
 
   return (
     <div className="flex flex-col gap-8">
@@ -254,64 +257,30 @@ export default function NotificationsPage() {
 
       {isLoading && (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <div className="divide-y divide-border overflow-x-auto">
-            <div className="grid min-w-[720px] grid-cols-4 gap-4 px-5 py-3 text-xs font-medium tracking-wide text-fg-3">
-              {['TO', 'SUBJECT', 'STATUS', 'CREATED'].map((h) => (
-                <span key={h}>{h}</span>
-              ))}
-            </div>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="grid min-w-[720px] grid-cols-4 items-center gap-4 px-5 py-4"
-              >
-                {Array.from({ length: 4 }).map((__, j) => (
-                  <span
-                    key={j}
-                    className="h-3.5 w-3/4 animate-pulse rounded bg-surface-2"
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+          <TableSkeleton
+            columns={['TO', 'SUBJECT', 'STATUS', 'CREATED']}
+            gridColsClassName="grid-cols-4"
+            minWidthClassName="min-w-[720px]"
+          />
         </div>
       )}
 
       {isError && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-danger-soft text-danger">
-            <TriangleAlert className="h-5 w-5" />
-          </span>
-          <h2 className="text-base font-semibold text-fg">
-            Couldn&apos;t load your notifications
-          </h2>
-          <p className="max-w-sm text-sm text-fg-2">
-            The notifications service didn&apos;t respond. Nothing was
-            changed.
-          </p>
-          <button
-            onClick={() => void jobsQuery.refetch()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-2"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry
-          </button>
-        </div>
+        <QueryStateCard
+          icon={TriangleAlert}
+          iconClassName="bg-danger-soft text-danger"
+          title="Couldn't load your notifications"
+          description="The notifications service didn't respond. Nothing was changed."
+          onRetry={() => void jobsQuery.refetch()}
+        />
       )}
 
       {isEmpty && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-soft text-accent">
-            <Mail className="h-5 w-5" />
-          </span>
-          <h2 className="text-base font-semibold text-fg">
-            No emails sent yet
-          </h2>
-          <p className="max-w-sm text-sm text-fg-2">
-            Once a key is used to call the notifications service, emails will
-            show up here.
-          </p>
-        </div>
+        <QueryStateCard
+          icon={Mail}
+          title="No emails sent yet"
+          description="Once a key is used to call the notifications service, emails will show up here."
+        />
       )}
 
       {(retryMutation.isError || cancelMutation.isError) && (
@@ -341,7 +310,7 @@ export default function NotificationsPage() {
             </span>
             {canLoadMore && (
               <button
-                onClick={() => setLimit((l) => Math.min(l + PAGE_SIZE, MAX_LIMIT))}
+                onClick={loadMore}
                 disabled={jobsQuery.isFetching}
                 className="font-medium text-accent hover:text-accent-hover disabled:opacity-50"
               >

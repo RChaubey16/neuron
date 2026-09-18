@@ -3,8 +3,6 @@ import { BullModule } from '@nestjs/bullmq';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { APP_FILTER, APP_GUARD } from '@nestjs/core';
 import { ThrottlerModule } from '@nestjs/throttler';
-import { AppController } from './app.controller';
-import { AppService } from './app.service';
 import { ApiKeyModule } from './api-keys/api-keys.module';
 import { AuthModule } from './auth/auth.module';
 import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
@@ -43,9 +41,7 @@ import { validate } from './config/env.validation';
     // order rather than by specificity.
     ShortUrlModule,
   ],
-  controllers: [AppController],
   providers: [
-    AppService,
     { provide: APP_GUARD, useClass: ApiKeyThrottlerGuard },
     { provide: APP_FILTER, useClass: GlobalExceptionFilter },
   ],

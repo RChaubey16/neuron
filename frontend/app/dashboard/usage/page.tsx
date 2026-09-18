@@ -20,13 +20,13 @@ import {
   Gauge,
   KeyRound,
   LineChart,
-  RefreshCw,
   TrendingUp,
   TriangleAlert,
   Zap,
   type LucideIcon,
 } from 'lucide-react';
 import { CallsChart } from './calls-chart';
+import { QueryStateCard } from '../query-state-card';
 
 const RANGES: RangeDays[] = [7, 30, 90];
 
@@ -102,42 +102,6 @@ function UsageLoadingState() {
   );
 }
 
-function UsageErrorState({ onRetry }: { onRetry: () => void }) {
-  return (
-    <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-      <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-danger-soft text-danger">
-        <TriangleAlert className="h-5 w-5" />
-      </span>
-      <h2 className="text-base font-semibold text-fg">
-        Couldn&apos;t load usage
-      </h2>
-      <p className="max-w-sm text-sm text-fg-2">
-        The usage service didn&apos;t respond. Try again in a moment.
-      </p>
-      <button
-        onClick={onRetry}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-2"
-      >
-        <RefreshCw className="h-3.5 w-3.5" />
-        Retry
-      </button>
-    </div>
-  );
-}
-
-function UsageEmptyState() {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-      <h2 className="text-base font-semibold text-fg">
-        No usage recorded yet
-      </h2>
-      <p className="max-w-sm text-sm text-fg-2">
-        Once a key is used to call a Neuron service, calls will show up here.
-      </p>
-    </div>
-  );
-}
-
 export default function UsagePage() {
   const [range, setRange] = useState<RangeDays>(30);
   const [serviceFilter, setServiceFilter] = useState<string | null>(null);
@@ -188,12 +152,23 @@ export default function UsagePage() {
       </div>
 
       {isLoading && <UsageLoadingState />}
-      {isError && <UsageErrorState onRetry={() => void usageQuery.refetch()} />}
+      {isError && (
+        <QueryStateCard
+          icon={TriangleAlert}
+          iconClassName="bg-danger-soft text-danger"
+          title="Couldn't load usage"
+          description="The usage service didn't respond. Try again in a moment."
+          onRetry={() => void usageQuery.refetch()}
+        />
+      )}
 
       {!isLoading &&
         !isError &&
         (isEmpty ? (
-          <UsageEmptyState />
+          <QueryStateCard
+            title="No usage recorded yet"
+            description="Once a key is used to call a Neuron service, calls will show up here."
+          />
         ) : (
           <>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">

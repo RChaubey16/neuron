@@ -23,7 +23,7 @@ import { CreateEmailDto } from './dto/create-email.dto';
 import { EmailJobParamsDto } from './dto/email-job-params.dto';
 import { EmailJobResponseDto } from './dto/email-job-response.dto';
 import { EmailJobListResponseDto } from './dto/email-job-list-response.dto';
-import { ListEmailJobsQueryDto } from './dto/list-email-jobs-query.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
 import { TemplateKeyParamsDto } from './dto/template-key-params.dto';
 import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
@@ -130,7 +130,7 @@ export class NotificationsController {
   @UseGuards(JwtAuthGuard)
   findAllForUser(
     @CurrentUser() user: User,
-    @Query() query: ListEmailJobsQueryDto,
+    @Query() query: PaginationQueryDto,
   ): Promise<EmailJobListResponseDto> {
     return this.notificationsService.findAllForUser(
       user.id,

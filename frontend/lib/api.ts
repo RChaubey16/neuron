@@ -13,6 +13,15 @@ export class ApiError extends Error {
   }
 }
 
+function buildQuery(params?: Record<string, number | string | undefined>): string {
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(params ?? {})) {
+    if (value !== undefined) query.set(key, String(value));
+  }
+  const qs = query.toString();
+  return qs ? `?${qs}` : '';
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken();
 
@@ -122,13 +131,8 @@ export const api = {
 
   getUsage: () => apiFetch<UsageSummary[]>('/usage'),
 
-  listShortUrls: (params?: { limit?: number; offset?: number }) => {
-    const query = new URLSearchParams();
-    if (params?.limit !== undefined) query.set('limit', String(params.limit));
-    if (params?.offset !== undefined) query.set('offset', String(params.offset));
-    const qs = query.toString();
-    return apiFetch<ShortUrlList>(`/short-url${qs ? `?${qs}` : ''}`);
-  },
+  listShortUrls: (params?: { limit?: number; offset?: number }) =>
+    apiFetch<ShortUrlList>(`/short-url${buildQuery(params)}`),
 
   createShortUrl: (originalUrl: string) =>
     apiFetch<ShortUrl>('/short-url', {
@@ -136,13 +140,8 @@ export const api = {
       body: JSON.stringify({ originalUrl }),
     }),
 
-  listEmailJobs: (params?: { limit?: number; offset?: number }) => {
-    const query = new URLSearchParams();
-    if (params?.limit !== undefined) query.set('limit', String(params.limit));
-    if (params?.offset !== undefined) query.set('offset', String(params.offset));
-    const qs = query.toString();
-    return apiFetch<EmailJobList>(`/notifications/email${qs ? `?${qs}` : ''}`);
-  },
+  listEmailJobs: (params?: { limit?: number; offset?: number }) =>
+    apiFetch<EmailJobList>(`/notifications/email${buildQuery(params)}`),
 
   sendEmail: (payload: { to: string[]; subject: string; body: string }) =>
     apiFetch<EmailJob>('/notifications/email', {

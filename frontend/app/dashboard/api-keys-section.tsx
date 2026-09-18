@@ -4,9 +4,9 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type ApiKey, type CreatedApiKey } from '@/lib/api';
 import { CreatedKeyModal } from './created-key-modal';
-import { Ban, KeyRound, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
-
-const SKELETON_ROWS = 4;
+import { QueryStateCard } from './query-state-card';
+import { TableSkeleton } from './table-skeleton';
+import { Ban, KeyRound, Plus, TriangleAlert } from 'lucide-react';
 
 function StatusBadge({ revoked }: { revoked: boolean }) {
   if (revoked) {
@@ -101,18 +101,11 @@ export function ApiKeysSection() {
       </div>
 
       {isEmpty ? (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-soft text-accent">
-            <KeyRound className="h-5 w-5" />
-          </span>
-          <h2 className="text-base font-semibold text-fg">
-            Create your first API key
-          </h2>
-          <p className="max-w-sm text-sm text-fg-2">
-            You need a key to call the URL shortener or send a notification.
-            Name it after where it will live, so you know what to revoke
-            later.
-          </p>
+        <QueryStateCard
+          icon={KeyRound}
+          title="Create your first API key"
+          description="You need a key to call the URL shortener or send a notification. Name it after where it will live, so you know what to revoke later."
+        >
           {createMutation.isError && (
             <p className="text-sm text-danger">Failed to generate key.</p>
           )}
@@ -123,7 +116,7 @@ export function ApiKeysSection() {
             pending={createMutation.isPending}
             className="mt-2 w-full max-w-sm"
           />
-        </div>
+        </QueryStateCard>
       ) : (
         <>
           <div className="flex flex-col gap-2 rounded-xl border border-border bg-surface p-5">
@@ -149,50 +142,22 @@ export function ApiKeysSection() {
 
           <div className="overflow-hidden rounded-xl border border-border bg-surface">
             {keysQuery.status === 'pending' && (
-              <div className="divide-y divide-border overflow-x-auto">
-                <div className="grid min-w-[640px] grid-cols-5 gap-4 px-5 py-3 text-xs font-medium tracking-wide text-fg-3">
-                  {['NAME', 'KEY', 'CREATED', 'LAST USED', 'STATUS'].map(
-                    (h) => (
-                      <span key={h}>{h}</span>
-                    ),
-                  )}
-                </div>
-                {Array.from({ length: SKELETON_ROWS }).map((_, i) => (
-                  <div
-                    key={i}
-                    className="grid min-w-[640px] grid-cols-5 items-center gap-4 px-5 py-4"
-                  >
-                    {Array.from({ length: 5 }).map((__, j) => (
-                      <span
-                        key={j}
-                        className="h-3.5 w-3/4 animate-pulse rounded bg-surface-2"
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+              <TableSkeleton
+                columns={['NAME', 'KEY', 'CREATED', 'LAST USED', 'STATUS']}
+                gridColsClassName="grid-cols-5"
+                minWidthClassName="min-w-[640px]"
+              />
             )}
 
             {keysQuery.status === 'error' && (
-              <div className="flex flex-col items-center gap-3 px-6 py-16 text-center">
-                <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-danger-soft text-danger">
-                  <TriangleAlert className="h-5 w-5" />
-                </span>
-                <h2 className="text-base font-semibold text-fg">
-                  Couldn&apos;t load your keys
-                </h2>
-                <p className="max-w-sm text-sm text-fg-2">
-                  The keys service didn&apos;t respond. Your keys are
-                  unaffected — nothing was changed.
-                </p>
-                <button
-                  onClick={() => void keysQuery.refetch()}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-2"
-                >
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Retry
-                </button>
-              </div>
+              <QueryStateCard
+                bordered={false}
+                icon={TriangleAlert}
+                iconClassName="bg-danger-soft text-danger"
+                title="Couldn't load your keys"
+                description="The keys service didn't respond. Your keys are unaffected — nothing was changed."
+                onRetry={() => void keysQuery.refetch()}
+              />
             )}
 
             {keysQuery.status === 'success' && keys && keys.length > 0 && (
@@ -260,7 +225,7 @@ export function ApiKeysSection() {
                   <span>
                     {keys.length} keys · {activeCount} active
                   </span>
-                  <span className="font-mono">GET /v1/keys</span>
+                  <span className="font-mono">GET /api-keys</span>
                 </div>
               </>
             )}

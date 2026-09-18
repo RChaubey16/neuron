@@ -1,5 +1,4 @@
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
-import { AppController } from '../app.controller';
 import { AuthController } from '../auth/auth.controller';
 import { ApiKeyController } from '../api-keys/api-keys.controller';
 import { ApiKeyGuard } from '../api-keys/guards/api-key.guard';
@@ -22,7 +21,6 @@ import { NotificationsController } from '../notifications/notifications.controll
  */
 
 const ALL_CONTROLLERS = [
-  AppController,
   HealthController,
   AuthController,
   ApiKeyController,

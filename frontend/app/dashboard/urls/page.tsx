@@ -1,12 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { API_URL, api, type ShortUrl } from '@/lib/api';
-import { Check, Copy, Link2, Plus, RefreshCw, TriangleAlert } from 'lucide-react';
+import { usePaginatedList } from '@/lib/use-paginated-list';
+import { Check, Copy, Link2, Plus, TriangleAlert } from 'lucide-react';
+import { QueryStateCard } from '../query-state-card';
+import { TableSkeleton } from '../table-skeleton';
 
 const PAGE_SIZE = 20;
-// Mirrors the backend's MAX_LIST_LIMIT (src/short-url/dto/list-short-urls-query.dto.ts).
+// Mirrors the backend's MAX_LIST_LIMIT (src/common/dto/pagination-query.dto.ts).
 const MAX_LIMIT = 100;
 
 function ShortenUrlForm() {
@@ -117,22 +120,21 @@ function UrlsTable({ items }: { items: ShortUrl[] }) {
 }
 
 export default function UrlsPage() {
-  // "Load more" grows `limit` rather than paging via `offset`, so the
-  // response's `items` is always the full accumulated list — no client-side
-  // merging of separate pages needed.
-  const [limit, setLimit] = useState(PAGE_SIZE);
-
-  const urlsQuery = useQuery({
-    queryKey: ['short-urls', limit],
-    queryFn: () => api.listShortUrls({ limit, offset: 0 }),
+  const {
+    query: urlsQuery,
+    items,
+    total,
+    isLoading,
+    isError,
+    isEmpty,
+    canLoadMore,
+    loadMore,
+  } = usePaginatedList({
+    queryKey: 'short-urls',
+    queryFn: api.listShortUrls,
+    pageSize: PAGE_SIZE,
+    maxLimit: MAX_LIMIT,
   });
-
-  const items = urlsQuery.data?.items ?? [];
-  const total = urlsQuery.data?.total ?? 0;
-  const isLoading = urlsQuery.status === 'pending';
-  const isError = urlsQuery.status === 'error';
-  const isEmpty = urlsQuery.status === 'success' && items.length === 0;
-  const canLoadMore = items.length < total && limit < MAX_LIMIT;
 
   return (
     <div className="flex flex-col gap-8">
@@ -149,64 +151,30 @@ export default function UrlsPage() {
 
       {isLoading && (
         <div className="overflow-hidden rounded-xl border border-border bg-surface">
-          <div className="divide-y divide-border overflow-x-auto">
-            <div className="grid min-w-[640px] grid-cols-4 gap-4 px-5 py-3 text-xs font-medium tracking-wide text-fg-3">
-              {['SHORT LINK', 'ORIGINAL URL', 'CREATED', 'CLICKS'].map((h) => (
-                <span key={h}>{h}</span>
-              ))}
-            </div>
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className="grid min-w-[640px] grid-cols-4 items-center gap-4 px-5 py-4"
-              >
-                {Array.from({ length: 4 }).map((__, j) => (
-                  <span
-                    key={j}
-                    className="h-3.5 w-3/4 animate-pulse rounded bg-surface-2"
-                  />
-                ))}
-              </div>
-            ))}
-          </div>
+          <TableSkeleton
+            columns={['SHORT LINK', 'ORIGINAL URL', 'CREATED', 'CLICKS']}
+            gridColsClassName="grid-cols-4"
+            minWidthClassName="min-w-[640px]"
+          />
         </div>
       )}
 
       {isError && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-danger-soft text-danger">
-            <TriangleAlert className="h-5 w-5" />
-          </span>
-          <h2 className="text-base font-semibold text-fg">
-            Couldn&apos;t load your URLs
-          </h2>
-          <p className="max-w-sm text-sm text-fg-2">
-            The URL shortener service didn&apos;t respond. Nothing was
-            changed.
-          </p>
-          <button
-            onClick={() => void urlsQuery.refetch()}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg hover:bg-surface-2"
-          >
-            <RefreshCw className="h-3.5 w-3.5" />
-            Retry
-          </button>
-        </div>
+        <QueryStateCard
+          icon={TriangleAlert}
+          iconClassName="bg-danger-soft text-danger"
+          title="Couldn't load your URLs"
+          description="The URL shortener service didn't respond. Nothing was changed."
+          onRetry={() => void urlsQuery.refetch()}
+        />
       )}
 
       {isEmpty && (
-        <div className="flex flex-col items-center gap-3 rounded-xl border border-border bg-surface px-6 py-16 text-center">
-          <span className="flex h-11 w-11 items-center justify-center rounded-lg bg-accent-soft text-accent">
-            <Link2 className="h-5 w-5" />
-          </span>
-          <h2 className="text-base font-semibold text-fg">
-            No URLs shortened yet
-          </h2>
-          <p className="max-w-sm text-sm text-fg-2">
-            Once a key is used to call the URL shortener, links will show up
-            here.
-          </p>
-        </div>
+        <QueryStateCard
+          icon={Link2}
+          title="No URLs shortened yet"
+          description="Once a key is used to call the URL shortener, links will show up here."
+        />
       )}
 
       {!isLoading && !isError && !isEmpty && (
@@ -218,7 +186,7 @@ export default function UrlsPage() {
             </span>
             {canLoadMore && (
               <button
-                onClick={() => setLimit((l) => Math.min(l + PAGE_SIZE, MAX_LIMIT))}
+                onClick={loadMore}
                 disabled={urlsQuery.isFetching}
                 className="font-medium text-accent hover:text-accent-hover disabled:opacity-50"
               >

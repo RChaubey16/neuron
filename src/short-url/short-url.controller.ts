@@ -22,7 +22,7 @@ import { ShortUrlService } from './short-url.service';
 import { CreateShortUrlDto } from './dto/create-short-url.dto';
 import { ShortUrlResponseDto } from './dto/short-url-response.dto';
 import { ShortUrlListResponseDto } from './dto/short-url-list-response.dto';
-import { ListShortUrlsQueryDto } from './dto/list-short-urls-query.dto';
+import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { ShortUrlCodeParamsDto } from './dto/short-url-code-params.dto';
 import type { ApiKey, User } from '../../generated/prisma';
 
@@ -52,7 +52,7 @@ export class ShortUrlController {
   @UseInterceptors(UsageLoggingInterceptor)
   findAllForApiKey(
     @CurrentApiKey() apiKey: ApiKey,
-    @Query() query: ListShortUrlsQueryDto,
+    @Query() query: PaginationQueryDto,
   ): Promise<ShortUrlListResponseDto> {
     return this.shortUrlService.findAllForApiKey(
       apiKey.id,
@@ -68,7 +68,7 @@ export class ShortUrlController {
   @UseGuards(JwtAuthGuard)
   findAllForUser(
     @CurrentUser() user: User,
-    @Query() query: ListShortUrlsQueryDto,
+    @Query() query: PaginationQueryDto,
   ): Promise<ShortUrlListResponseDto> {
     return this.shortUrlService.findAllForUser(
       user.id,

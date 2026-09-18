@@ -11,7 +11,7 @@ export class PrismaService
   constructor(configService: ConfigService) {
     super({
       adapter: new PrismaPg({
-        connectionString: configService.get<string>('DATABASE_URL'),
+        connectionString: configService.getOrThrow<string>('DATABASE_URL'),
       }),
     });
   }
