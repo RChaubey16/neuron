@@ -12,6 +12,7 @@ import { EmailJobResponseDto } from './dto/email-job-response.dto';
 import { EmailJobListResponseDto } from './dto/email-job-list-response.dto';
 import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
 import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
+import { EmailTemplatePreviewDto } from './dto/email-template-preview.dto';
 import { EMAIL_TEMPLATES } from './templates/templates';
 import { renderTemplate } from './templates/render-template';
 import type { EmailJob } from '../../generated/prisma';
@@ -87,6 +88,30 @@ export class NotificationsService {
           requiredVariables: template.requiredVariables,
         }),
     );
+  }
+
+  /**
+   * Renders every registered template with its built-in sample variables,
+   * for the dashboard's template preview page — unlike listTemplates, this
+   * exposes the actual subject/body so a human can see what a template
+   * looks like before using it.
+   *
+   * @returns Every template, rendered with its own sampleVariables
+   */
+  previewTemplates(): EmailTemplatePreviewDto[] {
+    return Object.entries(EMAIL_TEMPLATES).map(([key, template]) => {
+      const { subject, body } = renderTemplate(
+        template,
+        template.sampleVariables,
+      );
+      return new EmailTemplatePreviewDto({
+        key,
+        subject,
+        body,
+        requiredVariables: template.requiredVariables,
+        urlVariables: template.urlVariables ?? [],
+      });
+    });
   }
 
   /**

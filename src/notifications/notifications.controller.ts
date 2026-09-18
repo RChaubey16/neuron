@@ -27,6 +27,7 @@ import { PaginationQueryDto } from '../common/dto/pagination-query.dto';
 import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
 import { TemplateKeyParamsDto } from './dto/template-key-params.dto';
 import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
+import { EmailTemplatePreviewDto } from './dto/email-template-preview.dto';
 import type { ApiKey, User } from '../../generated/prisma';
 
 // No class-level @Controller() prefix/guards (unlike this controller's
@@ -126,6 +127,15 @@ export class NotificationsController {
   // Dashboard routes (JwtAuthGuard, unversioned) — mirror
   // ShortUrlController's GET/POST '/short-url' pair.
 
+  // No @Service()/UsageLoggingInterceptor — this only reads static,
+  // code-defined template data and never touches the queue/Resend, so
+  // there's no service usage to log, matching findAllForUser below.
+  @Get('notifications/templates')
+  @UseGuards(JwtAuthGuard)
+  previewTemplates(): EmailTemplatePreviewDto[] {
+    return this.notificationsService.previewTemplates();
+  }
+
   @Get('notifications/email')
   @UseGuards(JwtAuthGuard)
   findAllForUser(
@@ -153,6 +163,26 @@ export class NotificationsController {
     @Body() dto: CreateEmailDto,
   ): Promise<EmailJobResponseDto> {
     return this.notificationsService.queueEmail({ userId: user.id }, dto);
+  }
+
+  // Dashboard-native counterpart to
+  // POST /api/v1/notifications/email/templates/:templateKey/send, mirroring
+  // sendFromDashboard above.
+  @Post('notifications/email/templates/:templateKey/send')
+  @HttpCode(HttpStatus.ACCEPTED)
+  @UseGuards(JwtAuthGuard)
+  @Service('email-notifications')
+  @UseInterceptors(UsageLoggingInterceptor)
+  sendTemplatedFromDashboard(
+    @CurrentUser() user: User,
+    @Param() params: TemplateKeyParamsDto,
+    @Body() dto: SendTemplatedEmailDto,
+  ): Promise<EmailJobResponseDto> {
+    return this.notificationsService.sendTemplatedEmail(
+      { userId: user.id },
+      params.templateKey,
+      dto,
+    );
   }
 
   // Dashboard actions on an existing job. No DashboardApiKeyGuard here —

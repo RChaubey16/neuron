@@ -115,6 +115,14 @@ export type EmailJobList = {
   offset: number;
 };
 
+export type EmailTemplatePreview = {
+  key: string;
+  subject: string;
+  body: string;
+  requiredVariables: string[];
+  urlVariables: string[];
+};
+
 export const api = {
   getMe: () => apiFetch<User>('/me'),
 
@@ -143,8 +151,20 @@ export const api = {
   listEmailJobs: (params?: { limit?: number; offset?: number }) =>
     apiFetch<EmailJobList>(`/notifications/email${buildQuery(params)}`),
 
+  listEmailTemplates: () =>
+    apiFetch<EmailTemplatePreview[]>('/notifications/templates'),
+
   sendEmail: (payload: { to: string[]; subject: string; body: string }) =>
     apiFetch<EmailJob>('/notifications/email', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  sendTemplatedEmail: (
+    templateKey: string,
+    payload: { to: string[]; variables: Record<string, string> },
+  ) =>
+    apiFetch<EmailJob>(`/notifications/email/templates/${templateKey}/send`, {
       method: 'POST',
       body: JSON.stringify(payload),
     }),

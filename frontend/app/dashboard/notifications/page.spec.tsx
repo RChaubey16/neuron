@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import NotificationsPage from './page';
-import { api, type EmailJobList } from '@/lib/api';
+import { api, type EmailJobList, type EmailTemplatePreview } from '@/lib/api';
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -12,7 +12,9 @@ vi.mock('@/lib/api', async () => {
     api: {
       ...actual.api,
       listEmailJobs: vi.fn(),
+      listEmailTemplates: vi.fn(),
       sendEmail: vi.fn(),
+      sendTemplatedEmail: vi.fn(),
       retryEmail: vi.fn(),
       cancelEmail: vi.fn(),
     },
@@ -29,9 +31,24 @@ function renderWithQueryClient(ui: React.ReactElement) {
 }
 
 const listEmailJobs = vi.mocked(api.listEmailJobs);
+const listEmailTemplates = vi.mocked(api.listEmailTemplates);
 const sendEmail = vi.mocked(api.sendEmail);
+const sendTemplatedEmail = vi.mocked(api.sendTemplatedEmail);
 const retryEmail = vi.mocked(api.retryEmail);
 const cancelEmail = vi.mocked(api.cancelEmail);
+
+const welcomeTemplate: EmailTemplatePreview = {
+  key: 'welcome',
+  subject: 'Welcome to Neuron, Ada!',
+  body: '<p>Hi Ada,</p>',
+  requiredVariables: ['name', 'productName'],
+  urlVariables: [],
+};
+
+// Every test renders the Send email form, which always fetches the
+// template list — default to one template (the 'welcome' default
+// selection) so unrelated tests don't need to know about this.
+listEmailTemplates.mockResolvedValue([welcomeTemplate]);
 
 function page(items: EmailJobList['items'], total: number, limit: number): EmailJobList {
   return { items, total, limit, offset: 0 };
@@ -84,7 +101,42 @@ describe('NotificationsPage', () => {
     expect(await screen.findByText('No emails sent yet')).toBeInTheDocument();
   });
 
-  it('sends an email, clears the form, and refreshes the list on success', async () => {
+  it('sends a templated email using the default template, and refreshes the list on success', async () => {
+    listEmailJobs.mockResolvedValueOnce(page([], 0, 20));
+    sendTemplatedEmail.mockResolvedValue({ ...baseJob, status: 'QUEUED' });
+    listEmailJobs.mockResolvedValue(page([{ ...baseJob, status: 'QUEUED' }], 1, 20));
+
+    const user = userEvent.setup();
+    renderWithQueryClient(<NotificationsPage />);
+
+    const toInput = await screen.findByPlaceholderText(
+      'recipient@example.com, another@example.com',
+    );
+    // Wait for the template list to load (and the 'welcome' <option> to
+    // exist) before asserting the default selection — a controlled
+    // <select>'s displayed value falls back to whatever option is
+    // available until the real one renders.
+    const nameInput = await screen.findByLabelText('name');
+    expect(screen.getByLabelText('Template')).toHaveValue('welcome');
+
+    await user.type(toInput, 'recipient@example.com');
+    await user.type(nameInput, 'Ada');
+    await user.type(screen.getByLabelText('productName'), 'Neuron');
+    await user.click(screen.getByRole('button', { name: 'Send' }));
+
+    await waitFor(() =>
+      expect(sendTemplatedEmail).toHaveBeenCalledWith('welcome', {
+        to: ['recipient@example.com'],
+        variables: { name: 'Ada', productName: 'Neuron' },
+      }),
+    );
+    await waitFor(() => expect(toInput).toHaveValue(''));
+    // Proves the list query was invalidated by the mutation, not just that
+    // the mutation itself succeeded.
+    expect(await screen.findByText('Welcome')).toBeInTheDocument();
+  });
+
+  it('sends a custom email, clears the form, and refreshes the list on success', async () => {
     listEmailJobs.mockResolvedValueOnce(page([], 0, 20));
     sendEmail.mockResolvedValue({ ...baseJob, status: 'QUEUED' });
     listEmailJobs.mockResolvedValue(page([{ ...baseJob, status: 'QUEUED' }], 1, 20));
@@ -95,6 +147,7 @@ describe('NotificationsPage', () => {
     const toInput = await screen.findByPlaceholderText(
       'recipient@example.com, another@example.com',
     );
+    await user.selectOptions(screen.getByLabelText('Template'), 'Custom');
     const subjectInput = screen.getByPlaceholderText('Subject');
     const bodyInput = screen.getByPlaceholderText('Message body');
 
@@ -126,6 +179,7 @@ describe('NotificationsPage', () => {
     const toInput = await screen.findByPlaceholderText(
       'recipient@example.com, another@example.com',
     );
+    await user.selectOptions(screen.getByLabelText('Template'), 'Custom');
     await user.type(toInput, 'not-an-email');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 

@@ -1,10 +1,18 @@
 'use client';
 
 import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, type EmailJob, type EmailJobStatus } from '@/lib/api';
 import { usePaginatedList } from '@/lib/use-paginated-list';
-import { Ban, Mail, Plus, RotateCcw, TriangleAlert } from 'lucide-react';
+import {
+  Ban,
+  FileText,
+  Mail,
+  Plus,
+  RotateCcw,
+  TriangleAlert,
+} from 'lucide-react';
 import { QueryStateCard } from '../query-state-card';
 import { TableSkeleton } from '../table-skeleton';
 
@@ -12,26 +20,79 @@ const PAGE_SIZE = 20;
 // Mirrors the backend's MAX_LIST_LIMIT (src/common/dto/pagination-query.dto.ts).
 const MAX_LIMIT = 100;
 
+// Sentinel template-select value for writing a one-off subject/body by hand,
+// distinct from every real template key (which comes from the API).
+const CUSTOM_TEMPLATE = '__custom__';
+const DEFAULT_TEMPLATE_KEY = 'welcome';
+
+const inputClassName =
+  'min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none';
+
+function TemplateVariableFields({
+  variables,
+  values,
+  onChange,
+}: {
+  variables: string[];
+  values: Record<string, string>;
+  onChange: (name: string, value: string) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2">
+      {variables.map((name) => (
+        <div key={name} className="flex flex-col gap-1">
+          <label
+            htmlFor={`template-var-${name}`}
+            className="text-xs font-medium text-fg-3"
+          >
+            {name}
+          </label>
+          <input
+            id={`template-var-${name}`}
+            value={values[name] ?? ''}
+            onChange={(e) => onChange(name, e.target.value)}
+            className={inputClassName}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SendEmailForm() {
   const queryClient = useQueryClient();
   const [to, setTo] = useState('');
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
+  const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE_KEY);
+  const [variables, setVariables] = useState<Record<string, string>>({});
+
+  const templatesQuery = useQuery({
+    queryKey: ['email-templates'],
+    queryFn: api.listEmailTemplates,
+  });
+
+  const isCustom = templateKey === CUSTOM_TEMPLATE;
+  const selectedTemplate = templatesQuery.data?.find(
+    (template) => template.key === templateKey,
+  );
 
   const sendMutation = useMutation({
-    mutationFn: () =>
-      api.sendEmail({
-        to: to
-          .split(',')
-          .map((address) => address.trim())
-          .filter(Boolean),
-        subject,
-        body,
-      }),
+    mutationFn: () => {
+      const recipients = to
+        .split(',')
+        .map((address) => address.trim())
+        .filter(Boolean);
+
+      return isCustom
+        ? api.sendEmail({ to: recipients, subject, body })
+        : api.sendTemplatedEmail(templateKey, { to: recipients, variables });
+    },
     onSuccess: () => {
       setTo('');
       setSubject('');
       setBody('');
+      setVariables({});
       // Prefix match: invalidates every `['email-jobs', limit]` query, not
       // just the current page size.
       void queryClient.invalidateQueries({ queryKey: ['email-jobs'] });
@@ -52,24 +113,77 @@ function SendEmailForm() {
           value={to}
           onChange={(e) => setTo(e.target.value)}
           placeholder="recipient@example.com, another@example.com"
-          className="min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
+          className={inputClassName}
         />
-        <input
-          value={subject}
-          onChange={(e) => setSubject(e.target.value)}
-          placeholder="Subject"
-          className="min-w-0 rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
-        />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Message body"
-          rows={3}
-          className="min-w-0 resize-y rounded-lg border border-border bg-surface-2 px-3 py-2 text-sm text-fg placeholder:text-fg-3 focus:border-accent focus:outline-none"
-        />
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="template-select" className="text-xs font-medium text-fg-3">
+            Template
+          </label>
+          <select
+            id="template-select"
+            value={templateKey}
+            onChange={(e) => {
+              setTemplateKey(e.target.value);
+              setVariables({});
+            }}
+            className={inputClassName}
+          >
+            {/* DEFAULT_TEMPLATE_KEY is always included, even before the
+                template list has loaded, so this controlled <select> can
+                actually display it as selected from the very first render —
+                otherwise, with no matching <option> yet, the browser falls
+                back to displaying the first available option (Custom)
+                despite templateKey's state already being 'welcome'. */}
+            {Array.from(
+              new Set([
+                DEFAULT_TEMPLATE_KEY,
+                ...(templatesQuery.data ?? []).map((template) => template.key),
+              ]),
+            ).map((key) => (
+              <option key={key} value={key}>
+                {key}
+              </option>
+            ))}
+            <option value={CUSTOM_TEMPLATE}>Custom</option>
+          </select>
+        </div>
+
+        {isCustom ? (
+          <>
+            <input
+              value={subject}
+              onChange={(e) => setSubject(e.target.value)}
+              placeholder="Subject"
+              className={inputClassName}
+            />
+            <textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Message body"
+              rows={3}
+              className={`resize-y ${inputClassName}`}
+            />
+          </>
+        ) : templatesQuery.isLoading ? (
+          <p className="text-sm text-fg-3">Loading template…</p>
+        ) : (
+          selectedTemplate && (
+            <TemplateVariableFields
+              variables={selectedTemplate.requiredVariables}
+              values={variables}
+              onChange={(name, value) =>
+                setVariables((current) => ({ ...current, [name]: value }))
+              }
+            />
+          )
+        )}
+
         <button
           type="submit"
-          disabled={sendMutation.isPending}
+          disabled={
+            sendMutation.isPending || (!isCustom && templatesQuery.isLoading)
+          }
           className="inline-flex shrink-0 items-center justify-center gap-1.5 self-end rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white shadow-[inset_0_-1px_0_rgba(16,24,40,0.15)] hover:bg-accent-hover disabled:opacity-50"
         >
           <Plus className="h-4 w-4" />
@@ -244,13 +358,22 @@ export default function NotificationsPage() {
 
   return (
     <div className="flex flex-col gap-8">
-      <div>
-        <h1 className="font-display text-[22px] font-semibold tracking-tight text-fg">
-          Notifications
-        </h1>
-        <p className="mt-1 text-sm text-fg-2">
-          Every email queued by any of your API keys.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-[22px] font-semibold tracking-tight text-fg">
+            Notifications
+          </h1>
+          <p className="mt-1 text-sm text-fg-2">
+            Every email queued by any of your API keys.
+          </p>
+        </div>
+        <Link
+          href="/dashboard/notifications/templates"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-border px-3 py-1.5 text-sm font-medium text-fg-2 hover:bg-surface-2"
+        >
+          <FileText className="h-3.5 w-3.5" />
+          View templates
+        </Link>
       </div>
 
       <SendEmailForm />

@@ -8,6 +8,9 @@ import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
 import { EmailProcessor } from './../src/notifications/processors/email.processor';
 
+const RENDERED_WELCOME_BODY =
+  '<div style="background-color:#f3f4f6;padding:32px 16px;font-family:-apple-system,Helvetica,Arial,sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background-color:#ffffff;border-radius:8px;overflow:hidden;"><tr><td style="background-color:#4f46e5;padding:20px 24px;"><span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">Neuron</span></td></tr><tr><td style="padding:32px 24px;color:#1f2937;font-size:14px;line-height:1.6;"><p style="margin:0 0 12px;">Hi Ada,</p><p style="margin:0;">Thanks for signing up for Neuron. We\'re glad to have you.</p></td></tr><tr><td style="padding:16px 24px;background-color:#f9fafb;color:#9ca3af;font-size:12px;">You\'re receiving this email because you have an account with Neuron.</td></tr></table></div>';
+
 describe('Notifications (e2e)', () => {
   let app: INestApplication<App>;
   const jwtServiceMock = { verifyAsync: jest.fn() };
@@ -204,7 +207,7 @@ describe('Notifications (e2e)', () => {
           apiKeyId: 'key-1',
           to: ['recipient@example.com'],
           subject: 'Welcome to Neuron, Ada!',
-          body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+          body: RENDERED_WELCOME_BODY,
         },
       });
     });
@@ -361,6 +364,31 @@ describe('Notifications (e2e)', () => {
     });
   });
 
+  describe('GET /notifications/templates (dashboard)', () => {
+    it('renders every template with its sample variables', async () => {
+      const response = await request(app.getHttpServer())
+        .get('/notifications/templates')
+        .set('Authorization', 'Bearer valid-token')
+        .expect(200);
+
+      expect(response.body).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'welcome',
+            subject: 'Welcome to Neuron, Ada!',
+            requiredVariables: ['name', 'productName'],
+          }),
+        ]),
+      );
+    });
+
+    it('rejects with no Authorization header', () => {
+      return request(app.getHttpServer())
+        .get('/notifications/templates')
+        .expect(401);
+    });
+  });
+
   describe('GET /notifications/email (dashboard)', () => {
     it("lists the caller's own email jobs via the dashboard route, not the ApiKeyGuard", async () => {
       const listedJob = { ...baseJob, status: 'SENT' };
@@ -430,6 +458,64 @@ describe('Notifications (e2e)', () => {
           to: ['recipient@example.com'],
           subject: 'Test',
           body: '<p>Hello</p>',
+        })
+        .expect(401);
+
+      expect(prismaMock.emailJob.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /notifications/email/templates/:templateKey/send (dashboard)', () => {
+    it("renders the template and queues it using the caller's userId directly, with no ApiKey lookup at all", async () => {
+      prismaMock.emailJob.create.mockResolvedValue({
+        ...baseJob,
+        subject: 'Welcome to Neuron, Ada!',
+        body: RENDERED_WELCOME_BODY,
+        status: 'QUEUED',
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/notifications/email/templates/welcome/send')
+        .set('Authorization', 'Bearer valid-token')
+        .send({
+          to: ['recipient@example.com'],
+          variables: { name: 'Ada', productName: 'Neuron' },
+        })
+        .expect(202);
+
+      expect(response.body).toMatchObject({
+        id: baseJob.id,
+        status: 'QUEUED',
+        subject: 'Welcome to Neuron, Ada!',
+      });
+      expect(prismaMock.emailJob.create).toHaveBeenCalledWith({
+        data: {
+          userId: dashboardUser.id,
+          apiKeyId: undefined,
+          to: ['recipient@example.com'],
+          subject: 'Welcome to Neuron, Ada!',
+          body: RENDERED_WELCOME_BODY,
+        },
+      });
+      expect(prismaMock.apiKey.findFirst).not.toHaveBeenCalled();
+    });
+
+    it('returns 404 for an unknown template key', async () => {
+      await request(app.getHttpServer())
+        .post('/notifications/email/templates/does-not-exist/send')
+        .set('Authorization', 'Bearer valid-token')
+        .send({ to: ['recipient@example.com'], variables: {} })
+        .expect(404);
+
+      expect(prismaMock.emailJob.create).not.toHaveBeenCalled();
+    });
+
+    it('rejects with no Authorization header, without touching the DB', async () => {
+      await request(app.getHttpServer())
+        .post('/notifications/email/templates/welcome/send')
+        .send({
+          to: ['recipient@example.com'],
+          variables: { name: 'Ada', productName: 'Neuron' },
         })
         .expect(401);
 

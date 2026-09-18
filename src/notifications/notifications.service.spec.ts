@@ -9,6 +9,9 @@ import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmailDto } from './dto/create-email.dto';
 
+const RENDERED_WELCOME_BODY =
+  '<div style="background-color:#f3f4f6;padding:32px 16px;font-family:-apple-system,Helvetica,Arial,sans-serif;"><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;margin:0 auto;background-color:#ffffff;border-radius:8px;overflow:hidden;"><tr><td style="background-color:#4f46e5;padding:20px 24px;"><span style="color:#ffffff;font-size:18px;font-weight:700;letter-spacing:-0.01em;">Neuron</span></td></tr><tr><td style="padding:32px 24px;color:#1f2937;font-size:14px;line-height:1.6;"><p style="margin:0 0 12px;">Hi Ada,</p><p style="margin:0;">Thanks for signing up for Neuron. We\'re glad to have you.</p></td></tr><tr><td style="padding:16px 24px;background-color:#f9fafb;color:#9ca3af;font-size:12px;">You\'re receiving this email because you have an account with Neuron.</td></tr></table></div>';
+
 describe('NotificationsService', () => {
   let service: NotificationsService;
   let queue: { add: jest.Mock; remove: jest.Mock };
@@ -122,7 +125,7 @@ describe('NotificationsService', () => {
       prisma.emailJob.create.mockResolvedValue({
         ...job,
         subject: 'Welcome to Neuron, Ada!',
-        body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+        body: RENDERED_WELCOME_BODY,
       });
       queue.add.mockResolvedValue({});
 
@@ -141,7 +144,7 @@ describe('NotificationsService', () => {
           apiKeyId: 'key-1',
           to: ['recipient@example.com'],
           subject: 'Welcome to Neuron, Ada!',
-          body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+          body: RENDERED_WELCOME_BODY,
         },
       });
       expect(queue.add).toHaveBeenCalledWith(
@@ -149,7 +152,7 @@ describe('NotificationsService', () => {
         {
           to: ['recipient@example.com'],
           subject: 'Welcome to Neuron, Ada!',
-          body: "<p>Hi Ada,</p><p>Thanks for signing up for Neuron. We're glad to have you.</p>",
+          body: RENDERED_WELCOME_BODY,
         },
         expect.objectContaining({ jobId: job.id }),
       );
@@ -249,6 +252,29 @@ describe('NotificationsService', () => {
           expect.objectContaining({
             key: 'password-reset',
             requiredVariables: ['name', 'resetUrl', 'expiryMinutes'],
+          }),
+        ]),
+      );
+    });
+  });
+
+  describe('previewTemplates', () => {
+    it('renders every template with its own sample variables', () => {
+      const result = service.previewTemplates();
+
+      expect(result).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            key: 'welcome',
+            subject: 'Welcome to Neuron, Ada!',
+            body: RENDERED_WELCOME_BODY,
+            requiredVariables: ['name', 'productName'],
+            urlVariables: [],
+          }),
+          expect.objectContaining({
+            key: 'password-reset',
+            requiredVariables: ['name', 'resetUrl', 'expiryMinutes'],
+            urlVariables: ['resetUrl'],
           }),
         ]),
       );
