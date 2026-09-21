@@ -34,8 +34,8 @@ one unified API.
 | `auth` | `GET /auth/google`, `GET /auth/google/callback` | Google OAuth → Nest-issued JWT |
 | `api-keys` | `POST/GET /api-keys`, `DELETE /api-keys/:id` | Create, list, revoke API keys |
 | `usage` | `GET /usage` | Per-service/day usage aggregates |
-| `notifications` | `POST /api/v1/notifications/email`, `GET/POST/DELETE /api/v1/notifications/email/:jobId(/retry)`, `GET /api/v1/notifications/email/templates`, `POST /api/v1/notifications/email/templates/:templateKey/send` | Email via Resend, queued as a durable job (BullMQ + Redis) with status/retry/cancel; predefined templates render server-side with `{{variable}}` interpolation |
-| `short-url` | `POST /api/v1/short-url/shorten`, `GET /:code` | `GET /:code` is public by design |
+| `notifications` | Machine (`x-api-key`, versioned): `POST/GET /api/v1/notifications/email`, `GET/POST/DELETE /api/v1/notifications/email/:jobId(/retry)`, `GET /api/v1/notifications/email/templates`, `POST /api/v1/notifications/email/templates/:templateKey/send`. Dashboard-native (session JWT, unversioned): `GET /notifications/templates`, `GET/POST /notifications/email`, `POST /notifications/email/templates/:templateKey/send`, `POST /notifications/email/:jobId/retry`, `DELETE /notifications/email/:jobId` | Email via Resend, queued as a durable job (BullMQ + Redis) with status/retry/cancel; predefined templates render server-side with `{{variable}}` interpolation; dashboard routes act directly as the logged-in user, no API key involved |
+| `short-url` | Machine (`x-api-key`, versioned): `POST /api/v1/short-url/shorten`, `GET /api/v1/short-url`. Dashboard-native (session JWT, unversioned): `GET/POST /short-url`. Public: `GET /:code` | `GET /:code` is public by design; dashboard routes act directly as the logged-in user, no API key involved |
 | `health` | `GET /health` | Liveness check, exempt from rate limiting |
 
 See [`docs/API.md`](docs/API.md) for full request/response details and a
