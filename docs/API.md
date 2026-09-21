@@ -564,6 +564,33 @@ Cancels a job that hasn't started processing yet.
 
 ---
 
+### `GET /notifications/templates`, `GET /notifications/email`, `POST /notifications/email`, `POST /notifications/email/templates/:templateKey/send`, `POST /notifications/email/:jobId/retry`, `DELETE /notifications/email/:jobId`
+
+Dashboard-native counterparts to the `/api/v1/notifications/email...` routes
+above, for a logged-in human using the notifications service directly from
+the dashboard rather than through a real API key. **Unversioned**, since
+they're consumed only by this repo's own first-party frontend (see
+`docs/2026-09-17-direct-ownership-design.md`).
+
+**Auth:** `Authorization: Bearer <jwt>` (in place of `x-api-key` — every
+other detail is identical to its machine counterpart)
+
+| Dashboard route | Same as machine route | Notes |
+|---|---|---|
+| `GET /notifications/templates` | `GET /api/v1/notifications/email/templates` | Identical response shape |
+| `GET /notifications/email` | *(no machine equivalent)* | Paginated list (`limit`/`offset` query params, same defaults as `GET /api/v1/short-url` below) of every email job across **all** of the caller's API keys, not just dashboard-originated ones — see `retry`/`cancel` below |
+| `POST /notifications/email` | `POST /api/v1/notifications/email` | Same `CreateEmailDto` body, same `202` response shape. The created job's `apiKeyId` is `null` in `UsageLog` — no API key is involved |
+| `POST /notifications/email/templates/:templateKey/send` | `POST /api/v1/notifications/email/templates/:templateKey/send` | Same body/response shape |
+| `POST /notifications/email/:jobId/retry` | `POST /api/v1/notifications/email/:jobId/retry` | **Not** restricted to jobs the dashboard itself created — a job originally queued by a real machine API key can be retried here too, since `GET /notifications/email` already lists every job the user owns regardless of which key made it |
+| `DELETE /notifications/email/:jobId` | `DELETE /api/v1/notifications/email/:jobId` | Same cross-key ownership as retry above |
+
+Response shapes, status codes, and error conditions (`400`/`404`/`409`) are
+otherwise identical to each route's machine counterpart documented above —
+substitute `401 Unauthorized | Missing/invalid bearer token` for
+`401 Unauthorized | Missing x-api-key header, or the key is invalid/revoked`.
+
+---
+
 ### `POST /api/v1/short-url/shorten`
 
 Creates a shortened URL owned by the calling API key. The first real
@@ -603,6 +630,63 @@ until deployment (Phase 8). Build the link yourself as
 | `400 Bad Request` | `originalUrl` missing, not a URL, or missing an `http(s)` scheme |
 | `409 Conflict` | Could not generate a unique short code after several attempts (extremely rare) |
 | `429 Too Many Requests` | Rate limit exceeded |
+
+---
+
+### `GET /api/v1/short-url`
+
+Lists short URLs created by the calling API key, most recently created
+first.
+
+**Auth:** `x-api-key: <raw-api-key>`
+
+**Query params**
+| Param | Type | Required | Notes |
+|---|---|---|---|
+| `limit` | number | No | Default 20, max 100 |
+| `offset` | number | No | Default 0 |
+
+**Response — `200 OK`**
+```json
+{
+  "items": [
+    {
+      "code": "UgFiSdm",
+      "originalUrl": "https://example.com/some/very/long/path",
+      "createdAt": "2026-08-30T12:00:00.000Z",
+      "clickCount": 3
+    }
+  ],
+  "total": 1,
+  "limit": 20,
+  "offset": 0
+}
+```
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `400 Bad Request` | `limit`/`offset` present but not a valid integer, `limit` over 100, or either is negative |
+
+---
+
+### `GET /short-url`, `POST /short-url`
+
+Dashboard-native counterparts for a logged-in human using the URL shortener
+directly from the dashboard rather than through a real API key.
+**Unversioned**, like the notifications dashboard routes above.
+
+**Auth:** `Authorization: Bearer <jwt>`
+
+| Dashboard route | Same as machine route | Notes |
+|---|---|---|
+| `GET /short-url` | `GET /api/v1/short-url` | Same query params/response shape, but lists every short URL owned by the logged-in user directly (not scoped to one API key) |
+| `POST /short-url` | `POST /api/v1/short-url/shorten` | Same `CreateShortUrlDto` body, same `201` response shape. The created row's `apiKeyId` is `null` in `UsageLog` — no API key is involved |
+
+Response shapes, status codes, and error conditions are otherwise identical
+to each route's machine counterpart, substituting a missing/invalid bearer
+token for a missing/invalid `x-api-key`.
 
 ---
 
