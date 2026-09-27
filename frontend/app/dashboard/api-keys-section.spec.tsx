@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/sonner';
 import { ApiKeysSection } from './api-keys-section';
 import { api, type ApiKey } from '@/lib/api';
 
@@ -23,7 +24,10 @@ function renderWithQueryClient(ui: React.ReactElement) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+    <QueryClientProvider client={queryClient}>
+      {ui}
+      <Toaster />
+    </QueryClientProvider>,
   );
 }
 
@@ -79,6 +83,7 @@ describe('ApiKeysSection', () => {
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
     expect(deleteApiKey).toHaveBeenCalledWith('key-1');
+    expect(await screen.findByText('Key deleted')).toBeInTheDocument();
     expect(
       await screen.findByText('Create your first API key'),
     ).toBeInTheDocument();
@@ -96,7 +101,7 @@ describe('ApiKeysSection', () => {
     expect(deleteApiKey).not.toHaveBeenCalled();
   });
 
-  it('shows an error when deleting fails', async () => {
+  it('shows an error toast when deleting fails', async () => {
     listApiKeys.mockResolvedValue([apiKey()]);
     deleteApiKey.mockRejectedValue(new Error('network error'));
     vi.spyOn(window, 'confirm').mockReturnValue(true);
@@ -107,7 +112,7 @@ describe('ApiKeysSection', () => {
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
     expect(
-      await screen.findByText('Failed to delete key.'),
+      await screen.findByText('Failed to delete key'),
     ).toBeInTheDocument();
   });
 

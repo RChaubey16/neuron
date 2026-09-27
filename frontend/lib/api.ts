@@ -13,6 +13,26 @@ export class ApiError extends Error {
   }
 }
 
+// GlobalExceptionFilter responds with `{ message: string | string[], ... }`
+// (an array for class-validator failures); anything else falls back to the
+// raw body.
+function parseErrorMessage(body: string): string {
+  try {
+    const { message } = JSON.parse(body) as { message?: unknown };
+    if (Array.isArray(message)) return message.join('. ');
+    if (typeof message === 'string') return message;
+  } catch {
+    // Not JSON — use the body as-is.
+  }
+  return body;
+}
+
+/** A user-facing description of a failed request, for toasts. */
+export function describeError(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  return "Couldn't reach the server. Check your connection and try again.";
+}
+
 function buildQuery(params?: Record<string, number | string | undefined>): string {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params ?? {})) {
@@ -42,8 +62,8 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok) {
-    const message = await response.text().catch(() => '');
-    throw new ApiError(response.status, message || response.statusText);
+    const body = await response.text().catch(() => '');
+    throw new ApiError(response.status, parseErrorMessage(body) || response.statusText);
   }
 
   if (response.status === HTTP_NO_CONTENT) return undefined as T;

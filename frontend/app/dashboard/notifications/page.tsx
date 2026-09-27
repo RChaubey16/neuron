@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type EmailJob, type EmailJobStatus } from '@/lib/api';
+import { toast } from 'sonner';
+import { api, describeError, type EmailJob, type EmailJobStatus } from '@/lib/api';
 import { usePaginatedList } from '@/lib/use-paginated-list';
 import {
   Ban,
@@ -93,10 +94,13 @@ function SendEmailForm() {
       setSubject('');
       setBody('');
       setVariables({});
+      toast.success('Email queued');
       // Prefix match: invalidates every `['email-jobs', limit]` query, not
       // just the current page size.
       void queryClient.invalidateQueries({ queryKey: ['email-jobs'] });
     },
+    onError: (error) =>
+      toast.error('Failed to send email', { description: describeError(error) }),
   });
 
   return (
@@ -190,9 +194,6 @@ function SendEmailForm() {
           {sendMutation.isPending ? 'Sending…' : 'Send'}
         </button>
       </form>
-      {sendMutation.isError && (
-        <p className="text-sm text-danger">Failed to send email.</p>
-      )}
     </div>
   );
 }
@@ -348,12 +349,22 @@ export default function NotificationsPage() {
 
   const retryMutation = useMutation({
     mutationFn: (jobId: string) => api.retryEmail(jobId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['email-jobs'] }),
+    onSuccess: () => {
+      toast.success('Email re-queued');
+      void queryClient.invalidateQueries({ queryKey: ['email-jobs'] });
+    },
+    onError: (error) =>
+      toast.error('Failed to retry email', { description: describeError(error) }),
   });
 
   const cancelMutation = useMutation({
     mutationFn: (jobId: string) => api.cancelEmail(jobId),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['email-jobs'] }),
+    onSuccess: () => {
+      toast.success('Email cancelled');
+      void queryClient.invalidateQueries({ queryKey: ['email-jobs'] });
+    },
+    onError: (error) =>
+      toast.error('Failed to cancel email', { description: describeError(error) }),
   });
 
   return (
@@ -404,14 +415,6 @@ export default function NotificationsPage() {
           title="No emails sent yet"
           description="Once a key is used to call the notifications service, emails will show up here."
         />
-      )}
-
-      {(retryMutation.isError || cancelMutation.isError) && (
-        <p className="text-sm text-danger">
-          {retryMutation.isError
-            ? 'Failed to retry email.'
-            : 'Failed to cancel email.'}
-        </p>
       )}
 
       {!isLoading && !isError && !isEmpty && (

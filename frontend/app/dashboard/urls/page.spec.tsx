@@ -2,8 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/sonner';
 import UrlsPage from './page';
-import { api, type ShortUrlList } from '@/lib/api';
+import { ApiError, api, type ShortUrlList } from '@/lib/api';
 
 vi.mock('@/lib/api', async () => {
   const actual = await vi.importActual<typeof import('@/lib/api')>('@/lib/api');
@@ -18,7 +19,10 @@ function renderWithQueryClient(ui: React.ReactElement) {
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+    <QueryClientProvider client={queryClient}>
+      {ui}
+      <Toaster />
+    </QueryClientProvider>,
   );
 }
 
@@ -161,9 +165,11 @@ describe('UrlsPage', () => {
     expect(await screen.findByText('/newcode')).toBeInTheDocument();
   });
 
-  it('shows an inline error and keeps the input when shortening fails', async () => {
+  it("shows an error toast with the server's message and keeps the input when shortening fails", async () => {
     listShortUrls.mockResolvedValue(page([], 0, 20));
-    createShortUrl.mockRejectedValue(new Error('bad request'));
+    createShortUrl.mockRejectedValue(
+      new ApiError(400, 'originalUrl must be a URL address'),
+    );
 
     const user = userEvent.setup();
     renderWithQueryClient(<UrlsPage />);
@@ -175,7 +181,10 @@ describe('UrlsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Shorten' }));
 
     expect(
-      await screen.findByText('Failed to shorten URL.'),
+      await screen.findByText('Failed to shorten URL'),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText('originalUrl must be a URL address'),
     ).toBeInTheDocument();
     expect(input).toHaveValue('not-a-url');
   });

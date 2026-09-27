@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { Toaster } from '@/components/ui/sonner';
 import NotificationsPage from './page';
 import { api, type EmailJobList, type EmailTemplatePreview } from '@/lib/api';
 
@@ -26,7 +27,10 @@ function renderWithQueryClient(ui: React.ReactElement) {
     defaultOptions: { queries: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>,
+    <QueryClientProvider client={queryClient}>
+      {ui}
+      <Toaster />
+    </QueryClientProvider>,
   );
 }
 
@@ -169,7 +173,7 @@ describe('NotificationsPage', () => {
     expect(await screen.findByText('Welcome')).toBeInTheDocument();
   });
 
-  it('shows an inline error and keeps the form filled when sending fails', async () => {
+  it('shows an error toast and keeps the form filled when sending fails', async () => {
     listEmailJobs.mockResolvedValue(page([], 0, 20));
     sendEmail.mockRejectedValue(new Error('bad request'));
 
@@ -183,7 +187,7 @@ describe('NotificationsPage', () => {
     await user.type(toInput, 'not-an-email');
     await user.click(screen.getByRole('button', { name: 'Send' }));
 
-    expect(await screen.findByText('Failed to send email.')).toBeInTheDocument();
+    expect(await screen.findByText('Failed to send email')).toBeInTheDocument();
     expect(toInput).toHaveValue('not-an-email');
   });
 
@@ -206,7 +210,7 @@ describe('NotificationsPage', () => {
     expect(await screen.findByText('Queued')).toBeInTheDocument();
   });
 
-  it('shows an inline error when retrying fails', async () => {
+  it('shows an error toast when retrying fails', async () => {
     const failedJob = { ...baseJob, status: 'FAILED' as const, error: 'boom' };
     listEmailJobs.mockResolvedValue(page([failedJob], 1, 20));
     retryEmail.mockRejectedValue(new Error('conflict'));
@@ -216,7 +220,7 @@ describe('NotificationsPage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Retry' }));
 
-    expect(await screen.findByText('Failed to retry email.')).toBeInTheDocument();
+    expect(await screen.findByText('Failed to retry email')).toBeInTheDocument();
   });
 
   it('cancels a QUEUED job after confirming, and refreshes the list on success', async () => {

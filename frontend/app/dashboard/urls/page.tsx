@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { API_URL, api, type ShortUrl } from '@/lib/api';
+import { toast } from 'sonner';
+import { API_URL, api, describeError, type ShortUrl } from '@/lib/api';
 import { usePaginatedList } from '@/lib/use-paginated-list';
 import { Check, Copy, Link2, Plus, TriangleAlert } from 'lucide-react';
 import { QueryStateCard } from '../query-state-card';
@@ -20,10 +21,13 @@ function ShortenUrlForm() {
     mutationFn: () => api.createShortUrl(originalUrl),
     onSuccess: () => {
       setOriginalUrl('');
+      toast.success('URL shortened');
       // Prefix match: invalidates every `['short-urls', limit]` query, not
       // just the current page size.
       void queryClient.invalidateQueries({ queryKey: ['short-urls'] });
     },
+    onError: (error) =>
+      toast.error('Failed to shorten URL', { description: describeError(error) }),
   });
 
   return (
@@ -51,9 +55,6 @@ function ShortenUrlForm() {
           {createMutation.isPending ? 'Shortening…' : 'Shorten'}
         </button>
       </form>
-      {createMutation.isError && (
-        <p className="text-sm text-danger">Failed to shorten URL.</p>
-      )}
     </div>
   );
 }

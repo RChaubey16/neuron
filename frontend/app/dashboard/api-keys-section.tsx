@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type ApiKey, type CreatedApiKey } from '@/lib/api';
+import { toast } from 'sonner';
+import { api, describeError, type ApiKey, type CreatedApiKey } from '@/lib/api';
 import { CreatedKeyModal } from './created-key-modal';
 import { QueryStateCard } from './query-state-card';
 import { TableSkeleton } from './table-skeleton';
@@ -76,16 +77,28 @@ export function ApiKeysSection() {
       setName('');
       void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
     },
+    onError: (error) =>
+      toast.error('Failed to generate key', { description: describeError(error) }),
   });
 
   const revokeMutation = useMutation({
     mutationFn: (id: string) => api.revokeApiKey(id),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+    onSuccess: () => {
+      toast.success('Key revoked');
+      void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+    onError: (error) =>
+      toast.error('Failed to revoke key', { description: describeError(error) }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => api.deleteApiKey(id),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+    onSuccess: () => {
+      toast.success('Key deleted');
+      void queryClient.invalidateQueries({ queryKey: ['api-keys'] });
+    },
+    onError: (error) =>
+      toast.error('Failed to delete key', { description: describeError(error) }),
   });
 
   const keys: ApiKey[] | undefined = keysQuery.data;
@@ -111,9 +124,6 @@ export function ApiKeysSection() {
           title="Create your first API key"
           description="You need a key to call the URL shortener or send a notification. Name it after where it will live, so you know what to revoke later."
         >
-          {createMutation.isError && (
-            <p className="text-sm text-danger">Failed to generate key.</p>
-          )}
           <KeyNameInput
             name={name}
             onChange={setName}
@@ -140,18 +150,7 @@ export function ApiKeysSection() {
                 The full key is shown once, at creation.
               </span>
             </div>
-            {createMutation.isError && (
-              <p className="text-sm text-danger">Failed to generate key.</p>
-            )}
           </div>
-
-          {(revokeMutation.isError || deleteMutation.isError) && (
-            <p className="text-sm text-danger">
-              {deleteMutation.isError
-                ? 'Failed to delete key.'
-                : 'Failed to revoke key.'}
-            </p>
-          )}
 
           <div className="overflow-hidden rounded-xl border border-border bg-surface">
             {keysQuery.status === 'pending' && (
