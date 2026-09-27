@@ -1,7 +1,8 @@
 # Direct ownership — design
 
 **Supersedes:** the "hidden per-user system API key" approach from
-`docs/2026-09-16-dashboard-service-usage-design.md`.
+`docs/2026-09-16-dashboard-service-usage-design.md` (since removed; see git
+history).
 
 ## Goal
 
