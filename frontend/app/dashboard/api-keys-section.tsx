@@ -4,6 +4,16 @@ import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, describeError, type ApiKey, type CreatedApiKey } from '@/lib/api';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { CreatedKeyModal } from './created-key-modal';
 import { QueryStateCard } from './query-state-card';
 import { TableSkeleton } from './table-skeleton';
@@ -63,10 +73,63 @@ function KeyNameInput({
   );
 }
 
+function DeleteKeyDialog({
+  apiKey,
+  pending,
+  onConfirm,
+  onOpenChange,
+}: {
+  apiKey: ApiKey | null;
+  pending: boolean;
+  onConfirm: (id: string) => void;
+  onOpenChange: (open: boolean) => void;
+}) {
+  // Keep showing the last key while the close animation plays, instead of
+  // its text blanking out the moment `apiKey` resets to null.
+  const [shownKey, setShownKey] = useState(apiKey);
+  if (apiKey && apiKey !== shownKey) setShownKey(apiKey);
+  const label = shownKey?.name ?? `${shownKey?.keyPrefix}…`;
+
+  return (
+    <AlertDialog open={apiKey !== null} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Delete API key?</AlertDialogTitle>
+          <AlertDialogDescription>
+            <span className="font-medium text-fg">{label}</span> will be
+            removed from this list.{' '}
+            {shownKey && !shownKey.revokedAt
+              ? 'It stops working immediately — any app still using it will get 401 errors. '
+              : ''}
+            Its usage history is kept. This can&apos;t be undone.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={pending}
+            onClick={(e) => {
+              // Radix closes the dialog on Action click by default; keep it
+              // open while the request is in flight so the user sees progress.
+              e.preventDefault();
+              if (apiKey) onConfirm(apiKey.id);
+            }}
+          >
+            <Trash2 />
+            {pending ? 'Deleting…' : 'Delete key'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
+
 export function ApiKeysSection() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [createdKey, setCreatedKey] = useState<CreatedApiKey | null>(null);
+  const [keyToDelete, setKeyToDelete] = useState<ApiKey | null>(null);
 
   const keysQuery = useQuery({ queryKey: ['api-keys'], queryFn: api.listApiKeys });
 
@@ -99,6 +162,7 @@ export function ApiKeysSection() {
     },
     onError: (error) =>
       toast.error('Failed to delete key', { description: describeError(error) }),
+    onSettled: () => setKeyToDelete(null),
   });
 
   const keys: ApiKey[] | undefined = keysQuery.data;
@@ -229,17 +293,7 @@ export function ApiKeysSection() {
                               </button>
                             )}
                             <button
-                              onClick={() => {
-                                if (
-                                  window.confirm(
-                                    key.revokedAt
-                                      ? 'Delete this key? It will be removed from this list. Its usage history is kept.'
-                                      : 'Delete this key? It will stop working immediately and be removed from this list. Its usage history is kept.',
-                                  )
-                                ) {
-                                  deleteMutation.mutate(key.id);
-                                }
-                              }}
+                              onClick={() => setKeyToDelete(key)}
                               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-fg-2 hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -263,6 +317,15 @@ export function ApiKeysSection() {
           </div>
         </>
       )}
+
+      <DeleteKeyDialog
+        apiKey={keyToDelete}
+        pending={deleteMutation.isPending}
+        onConfirm={(id) => deleteMutation.mutate(id)}
+        onOpenChange={(open) => {
+          if (!open && !deleteMutation.isPending) setKeyToDelete(null);
+        }}
+      />
 
       {createdKey && (
         <CreatedKeyModal

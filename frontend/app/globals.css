@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /*
  * Neuron dashboard design tokens — light theme only, deliberately: this is an

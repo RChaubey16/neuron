@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from '@/components/ui/sonner';
@@ -70,50 +70,106 @@ describe('ApiKeysSection', () => {
     expect(screen.getAllByRole('button', { name: 'Delete' })).toHaveLength(2);
   });
 
-  it('deletes a key after confirmation and refetches the list', async () => {
-    listApiKeys
-      .mockResolvedValueOnce([apiKey()])
-      .mockResolvedValueOnce([]);
-    deleteApiKey.mockResolvedValue(undefined);
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
+  it('opens a confirmation dialog instead of deleting straight away', async () => {
+    listApiKeys.mockResolvedValue([apiKey()]);
+    const confirmSpy = vi.spyOn(window, 'confirm');
 
     const user = userEvent.setup();
     renderWithQueryClient(<ApiKeysSection />);
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
 
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Delete API key?')).toBeInTheDocument();
+    expect(within(dialog).getByText('production-web')).toBeInTheDocument();
+    expect(within(dialog).getByText(/stops working immediately/)).toBeInTheDocument();
+    expect(confirmSpy).not.toHaveBeenCalled();
+    expect(deleteApiKey).not.toHaveBeenCalled();
+  });
+
+  it("doesn't warn that a revoked key will stop working", async () => {
+    listApiKeys.mockResolvedValue([
+      apiKey({ revokedAt: '2026-09-21T00:00:00.000Z' }),
+    ]);
+
+    const user = userEvent.setup();
+    renderWithQueryClient(<ApiKeysSection />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).queryByText(/stops working immediately/)).not.toBeInTheDocument();
+  });
+
+  it('deletes a key once confirmed in the dialog, then refetches the list', async () => {
+    listApiKeys
+      .mockResolvedValueOnce([apiKey()])
+      .mockResolvedValueOnce([]);
+    deleteApiKey.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    renderWithQueryClient(<ApiKeysSection />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete key' }));
+
     expect(deleteApiKey).toHaveBeenCalledWith('key-1');
     expect(await screen.findByText('Key deleted')).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
     expect(
       await screen.findByText('Create your first API key'),
     ).toBeInTheDocument();
   });
 
-  it('does nothing when the delete confirmation is cancelled', async () => {
+  it('closes without deleting when cancelled', async () => {
     listApiKeys.mockResolvedValue([apiKey()]);
-    vi.spyOn(window, 'confirm').mockReturnValue(false);
 
     const user = userEvent.setup();
     renderWithQueryClient(<ApiKeysSection />);
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
 
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
     expect(deleteApiKey).not.toHaveBeenCalled();
   });
 
-  it('shows an error toast when deleting fails', async () => {
+  it('closes without deleting on Escape', async () => {
     listApiKeys.mockResolvedValue([apiKey()]);
-    deleteApiKey.mockRejectedValue(new Error('network error'));
-    vi.spyOn(window, 'confirm').mockReturnValue(true);
 
     const user = userEvent.setup();
     renderWithQueryClient(<ApiKeysSection />);
 
     await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await screen.findByRole('alertdialog');
+    await user.keyboard('{Escape}');
+
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
+    expect(deleteApiKey).not.toHaveBeenCalled();
+  });
+
+  it('closes the dialog and shows an error toast when deleting fails', async () => {
+    listApiKeys.mockResolvedValue([apiKey()]);
+    deleteApiKey.mockRejectedValue(new Error('network error'));
+
+    const user = userEvent.setup();
+    renderWithQueryClient(<ApiKeysSection />);
+
+    await user.click(await screen.findByRole('button', { name: 'Delete' }));
+    await user.click(await screen.findByRole('button', { name: 'Delete key' }));
 
     expect(
       await screen.findByText('Failed to delete key'),
     ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.queryByRole('alertdialog')).not.toBeInTheDocument(),
+    );
   });
 
   it('revokes an active key after confirmation', async () => {
