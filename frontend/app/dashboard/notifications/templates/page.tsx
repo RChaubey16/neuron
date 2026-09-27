@@ -4,7 +4,8 @@ import { useRef, useState } from 'react';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, FileText, TriangleAlert } from 'lucide-react';
-import { api, type EmailTemplatePreview } from '@/lib/api';
+import type { EmailTemplatePreview } from '@/lib/api';
+import { emailTemplatesQuery } from '@/lib/queries';
 import { QueryStateCard } from '../../query-state-card';
 
 // A minimal reset matching how an unstyled HTML email typically renders in
@@ -154,10 +155,7 @@ function TemplateCardSkeleton() {
 }
 
 export default function EmailTemplatesPage() {
-  const templatesQuery = useQuery({
-    queryKey: ['email-templates'],
-    queryFn: api.listEmailTemplates,
-  });
+  const templatesQuery = useQuery(emailTemplatesQuery);
 
   const templates = templatesQuery.data ?? [];
   const isLoading = templatesQuery.isLoading;

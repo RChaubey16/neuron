@@ -2,7 +2,7 @@
 
 import type { ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { meQuery } from '@/lib/queries';
 import { useAuthGuard } from '@/lib/use-auth-guard';
 import { clearToken } from '@/lib/auth-token';
 import { DashboardNav } from './dashboard-nav';
@@ -13,11 +13,7 @@ export default function DashboardLayout({
   children: ReactNode;
 }) {
   const ready = useAuthGuard();
-  const { data: user } = useQuery({
-    queryKey: ['me'],
-    queryFn: api.getMe,
-    enabled: ready,
-  });
+  const { data: user } = useQuery({ ...meQuery, enabled: ready });
 
   if (!ready) return null;
 

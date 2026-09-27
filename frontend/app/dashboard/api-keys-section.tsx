@@ -1,23 +1,22 @@
 'use client';
 
 import { useState } from 'react';
+import dynamic from 'next/dynamic';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, describeError, type ApiKey, type CreatedApiKey } from '@/lib/api';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import { CreatedKeyModal } from './created-key-modal';
 import { QueryStateCard } from './query-state-card';
 import { TableSkeleton } from './table-skeleton';
 import { Ban, KeyRound, Plus, Trash2, TriangleAlert } from 'lucide-react';
+
+// The dialog pulls in Radix's focus-trap/scroll-lock/portal code, which the
+// page doesn't need until someone clicks Delete — so it's code-split, and the
+// Delete button starts fetching it on hover/focus so it's usually ready by
+// the time the click lands.
+const loadDeleteKeyDialog = () =>
+  import('./delete-key-dialog').then((m) => m.DeleteKeyDialog);
+const DeleteKeyDialog = dynamic(loadDeleteKeyDialog, { ssr: false });
 
 function StatusBadge({ revoked }: { revoked: boolean }) {
   if (revoked) {
@@ -73,63 +72,14 @@ function KeyNameInput({
   );
 }
 
-function DeleteKeyDialog({
-  apiKey,
-  pending,
-  onConfirm,
-  onOpenChange,
-}: {
-  apiKey: ApiKey | null;
-  pending: boolean;
-  onConfirm: (id: string) => void;
-  onOpenChange: (open: boolean) => void;
-}) {
-  // Keep showing the last key while the close animation plays, instead of
-  // its text blanking out the moment `apiKey` resets to null.
-  const [shownKey, setShownKey] = useState(apiKey);
-  if (apiKey && apiKey !== shownKey) setShownKey(apiKey);
-  const label = shownKey?.name ?? `${shownKey?.keyPrefix}…`;
-
-  return (
-    <AlertDialog open={apiKey !== null} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete API key?</AlertDialogTitle>
-          <AlertDialogDescription>
-            <span className="font-medium text-fg">{label}</span> will be
-            removed from this list.{' '}
-            {shownKey && !shownKey.revokedAt
-              ? 'It stops working immediately — any app still using it will get 401 errors. '
-              : ''}
-            Its usage history is kept. This can&apos;t be undone.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
-          <AlertDialogAction
-            variant="destructive"
-            disabled={pending}
-            onClick={(e) => {
-              // Radix closes the dialog on Action click by default; keep it
-              // open while the request is in flight so the user sees progress.
-              e.preventDefault();
-              if (apiKey) onConfirm(apiKey.id);
-            }}
-          >
-            <Trash2 />
-            {pending ? 'Deleting…' : 'Delete key'}
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
 export function ApiKeysSection() {
   const queryClient = useQueryClient();
   const [name, setName] = useState('');
   const [createdKey, setCreatedKey] = useState<CreatedApiKey | null>(null);
   const [keyToDelete, setKeyToDelete] = useState<ApiKey | null>(null);
+  // Mount the lazy dialog on first use, then keep it mounted so later
+  // closes still get their exit animation.
+  const [deleteDialogUsed, setDeleteDialogUsed] = useState(false);
 
   const keysQuery = useQuery({ queryKey: ['api-keys'], queryFn: api.listApiKeys });
 
@@ -293,7 +243,12 @@ export function ApiKeysSection() {
                               </button>
                             )}
                             <button
-                              onClick={() => setKeyToDelete(key)}
+                              onMouseEnter={() => void loadDeleteKeyDialog()}
+                              onFocus={() => void loadDeleteKeyDialog()}
+                              onClick={() => {
+                                setDeleteDialogUsed(true);
+                                setKeyToDelete(key);
+                              }}
                               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-fg-2 hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
                             >
                               <Trash2 className="h-3 w-3" />
@@ -318,14 +273,16 @@ export function ApiKeysSection() {
         </>
       )}
 
-      <DeleteKeyDialog
-        apiKey={keyToDelete}
-        pending={deleteMutation.isPending}
-        onConfirm={(id) => deleteMutation.mutate(id)}
-        onOpenChange={(open) => {
-          if (!open && !deleteMutation.isPending) setKeyToDelete(null);
-        }}
-      />
+      {deleteDialogUsed && (
+        <DeleteKeyDialog
+          apiKey={keyToDelete}
+          pending={deleteMutation.isPending}
+          onConfirm={(id) => deleteMutation.mutate(id)}
+          onOpenChange={(open) => {
+            if (!open && !deleteMutation.isPending) setKeyToDelete(null);
+          }}
+        />
+      )}
 
       {createdKey && (
         <CreatedKeyModal

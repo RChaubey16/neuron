@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { api, describeError, type EmailJob, type EmailJobStatus } from '@/lib/api';
+import { emailTemplatesQuery } from '@/lib/queries';
 import { usePaginatedList } from '@/lib/use-paginated-list';
 import {
   Ban,
@@ -68,10 +69,7 @@ function SendEmailForm() {
   const [templateKey, setTemplateKey] = useState(DEFAULT_TEMPLATE_KEY);
   const [variables, setVariables] = useState<Record<string, string>>({});
 
-  const templatesQuery = useQuery({
-    queryKey: ['email-templates'],
-    queryFn: api.listEmailTemplates,
-  });
+  const templatesQuery = useQuery(emailTemplatesQuery);
 
   const isCustom = templateKey === CUSTOM_TEMPLATE;
   const selectedTemplate = templatesQuery.data?.find(
@@ -198,18 +196,18 @@ function SendEmailForm() {
   );
 }
 
-function StatusBadge({ status }: { status: EmailJobStatus }) {
-  const style: Record<EmailJobStatus, string> = {
-    QUEUED: 'bg-surface-2 text-fg-3',
-    PROCESSING: 'bg-surface-2 text-fg-3',
-    SENT: 'bg-success-soft text-success',
-    FAILED: 'bg-danger-soft text-danger',
-    CANCELLED: 'bg-surface-2 text-fg-3',
-  };
+const STATUS_STYLES: Record<EmailJobStatus, string> = {
+  QUEUED: 'bg-surface-2 text-fg-3',
+  PROCESSING: 'bg-surface-2 text-fg-3',
+  SENT: 'bg-success-soft text-success',
+  FAILED: 'bg-danger-soft text-danger',
+  CANCELLED: 'bg-surface-2 text-fg-3',
+};
 
+function StatusBadge({ status }: { status: EmailJobStatus }) {
   return (
     <span
-      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${style[status]}`}
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${STATUS_STYLES[status]}`}
     >
       {status.charAt(0) + status.slice(1).toLowerCase()}
     </span>

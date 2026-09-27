@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { api } from '@/lib/api';
+import { meQuery } from '@/lib/queries';
 import { Gauge, GitBranch, Timer, UserRound, type LucideIcon } from 'lucide-react';
 
 function SettingsRow({
@@ -30,7 +30,7 @@ function SettingsRow({
 }
 
 export default function SettingsPage() {
-  const { data: user } = useQuery({ queryKey: ['me'], queryFn: api.getMe });
+  const { data: user } = useQuery(meQuery);
 
   return (
     <div className="flex flex-col gap-8">
