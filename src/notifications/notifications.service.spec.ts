@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { getQueueToken } from '@nestjs/bullmq';
 import { Test, TestingModule } from '@nestjs/testing';
@@ -117,6 +118,55 @@ describe('NotificationsService', () => {
           body: '<p>Hello</p>',
         },
       });
+    });
+  });
+
+  describe('when the queue rejects the job', () => {
+    it('marks a new job FAILED instead of leaving it QUEUED, and throws 503', async () => {
+      prisma.emailJob.create.mockResolvedValue(job);
+      prisma.emailJob.update.mockResolvedValue({});
+      queue.add.mockRejectedValue(new Error('READONLY'));
+
+      await expect(
+        service.queueEmail(
+          { userId: 'user-1', apiKeyId: 'key-1' },
+          { to: job.to, subject: job.subject, body: job.body },
+        ),
+      ).rejects.toThrow(ServiceUnavailableException);
+
+      expect(prisma.emailJob.update).toHaveBeenCalledWith({
+        where: { id: 'job-1' },
+        data: { status: 'FAILED', error: 'Could not be queued for delivery' },
+      });
+    });
+
+    it('puts a retried job back to FAILED instead of leaving it QUEUED, and throws 503', async () => {
+      prisma.emailJob.findFirst.mockResolvedValue({ ...job, status: 'FAILED' });
+      prisma.emailJob.update.mockResolvedValue({ ...job, status: 'QUEUED' });
+      queue.remove.mockResolvedValue(1);
+      queue.add.mockRejectedValue(new Error('READONLY'));
+
+      await expect(service.retry('key-1', 'job-1')).rejects.toThrow(
+        ServiceUnavailableException,
+      );
+
+      expect(prisma.emailJob.update).toHaveBeenLastCalledWith({
+        where: { id: 'job-1' },
+        data: { status: 'FAILED', error: 'Could not be queued for delivery' },
+      });
+    });
+
+    it('still throws 503 when marking the job FAILED also fails', async () => {
+      prisma.emailJob.create.mockResolvedValue(job);
+      prisma.emailJob.update.mockRejectedValue(new Error('db down'));
+      queue.add.mockRejectedValue(new Error('READONLY'));
+
+      await expect(
+        service.queueEmail(
+          { userId: 'user-1' },
+          { to: job.to, subject: job.subject, body: job.body },
+        ),
+      ).rejects.toThrow(ServiceUnavailableException);
     });
   });
 

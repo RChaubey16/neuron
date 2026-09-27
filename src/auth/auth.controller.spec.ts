@@ -18,7 +18,7 @@ describe('AuthController', () => {
         { provide: AuthService, useValue: authService },
         {
           provide: ConfigService,
-          useValue: { get: () => 'http://localhost:3001' },
+          useValue: { getOrThrow: () => 'http://localhost:3001' },
         },
       ],
     })

@@ -65,4 +65,17 @@ describe('AuthController (e2e)', () => {
       .set('Authorization', 'Bearer not-a-real-token')
       .expect(401);
   });
+
+  it('/auth/google/callback (GET) sends a cancelled sign-in back to the dashboard instead of rendering JSON', async () => {
+    // Exactly what Google redirects back with when the user clicks "Cancel"
+    // on the consent screen; passport-oauth2 turns it into an auth failure
+    // before any token exchange happens, so no Google mock is needed.
+    const response = await request(app.getHttpServer())
+      .get('/auth/google/callback?error=access_denied')
+      .expect(302);
+
+    expect(response.headers.location).toBe(
+      `${process.env.FRONTEND_URL}/auth/callback#error=access_denied`,
+    );
+  });
 });

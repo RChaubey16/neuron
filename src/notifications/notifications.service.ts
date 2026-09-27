@@ -1,7 +1,9 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
+  ServiceUnavailableException,
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
@@ -19,6 +21,8 @@ import type { EmailJob } from '../../generated/prisma';
 
 @Injectable()
 export class NotificationsService {
+  private readonly logger = new Logger(NotificationsService.name);
+
   constructor(
     @InjectQueue('email') private readonly emailQueue: Queue<CreateEmailDto>,
     private readonly prisma: PrismaService,
@@ -30,10 +34,11 @@ export class NotificationsService {
    * never need reconciling.
    * A downstream Resend failure is EmailProcessor's concern, handled via
    * BullMQ's own retry/backoff on the job, not by this method.
+   * Throws a ServiceUnavailableException if the job couldn't be queued
+   * (see createAndQueueJob).
    * Note: if Redis is unreachable, the queue add below does NOT reliably
    * throw — ioredis's offline-queue buffering can cause it to hang instead
    * of failing fast (known gap, not yet fixed; see CLAUDE.md's gotchas).
-   * The EmailJob row would be created and left QUEUED in that case.
    *
    * @param owner - Id of the owning user, plus the ApiKey id when a machine
    *   made the request (omitted for a dashboard-native call)
@@ -137,6 +142,7 @@ export class NotificationsService {
    * payload, resetting its attempt count.
    * Throws a NotFoundException per the same ownership rule as getStatus.
    * Throws a ConflictException if the job isn't in a FAILED state.
+   * Throws a ServiceUnavailableException if it couldn't be re-queued.
    *
    * @param apiKeyId - Id of the ApiKey making the request, for ownership
    * @param jobId - Id of the job to retry
@@ -153,6 +159,7 @@ export class NotificationsService {
    * of which key (or none) created it, matching `findAllForUser`'s scoping.
    * Throws a NotFoundException per the same ownership rule as getStatus.
    * Throws a ConflictException if the job isn't in a FAILED state.
+   * Throws a ServiceUnavailableException if it couldn't be re-queued.
    *
    * @param userId - Id of the dashboard user, for ownership
    * @param jobId - Id of the job to retry
@@ -213,12 +220,16 @@ export class NotificationsService {
     // A previously failed BullMQ job with this same id may still exist in
     // Redis (removeOnFail retains the last 5000) — remove it first so
     // re-adding with the same jobId doesn't collide with it.
-    await this.emailQueue.remove(jobId);
-    await this.emailQueue.add(
-      'send',
-      { to: updated.to, subject: updated.subject, body: updated.body },
-      this.jobOptions(jobId),
-    );
+    try {
+      await this.emailQueue.remove(jobId);
+      await this.emailQueue.add(
+        'send',
+        { to: updated.to, subject: updated.subject, body: updated.body },
+        this.jobOptions(jobId),
+      );
+    } catch (error) {
+      await this.markQueueingFailed(jobId, error);
+    }
 
     return this.toResponseDto(updated);
   }
@@ -321,9 +332,44 @@ export class NotificationsService {
       },
     });
 
-    await this.emailQueue.add('send', email, this.jobOptions(job.id));
+    try {
+      await this.emailQueue.add('send', email, this.jobOptions(job.id));
+    } catch (error) {
+      await this.markQueueingFailed(job.id, error);
+    }
 
     return this.toResponseDto(job);
+  }
+
+  /**
+   * Records that a job's row exists but it never made it onto the queue, so
+   * it shows as FAILED (and retryable from the dashboard) instead of sitting
+   * QUEUED forever with no worker ever picking it up.
+   * Always throws a ServiceUnavailableException, since the caller's email
+   * was not queued.
+   */
+  private async markQueueingFailed(
+    jobId: string,
+    error: unknown,
+  ): Promise<never> {
+    this.logger.error(
+      `Failed to queue EmailJob ${jobId}`,
+      error instanceof Error ? error.stack : error,
+    );
+    await this.prisma.emailJob
+      .update({
+        where: { id: jobId },
+        data: { status: 'FAILED', error: 'Could not be queued for delivery' },
+      })
+      .catch((updateError: unknown) => {
+        this.logger.error(
+          `Failed to mark EmailJob ${jobId} as FAILED after a queueing error`,
+          updateError instanceof Error ? updateError.stack : updateError,
+        );
+      });
+    throw new ServiceUnavailableException(
+      'Email could not be queued right now, please try again',
+    );
   }
 
   /**

@@ -42,6 +42,22 @@ describe('RequestIdMiddleware', () => {
     );
   });
 
+  it.each([
+    ['too long', 'a'.repeat(129)],
+    ['containing spaces', 'not a valid id'],
+    ['containing markup', '<script>alert(1)</script>'],
+  ])('ignores an inbound id %s and generates a UUID instead', (_case, id) => {
+    const req = {
+      headers: { [REQUEST_ID_HEADER]: id },
+    } as unknown as Request;
+
+    middleware.use(req, res as unknown as Response, next);
+
+    const [, requestId] = res.setHeader.mock.calls[0] as [string, string];
+    expect(requestId).not.toBe(id);
+    expect(requestId).toMatch(/^[0-9a-f-]{36}$/);
+  });
+
   it('makes the requestId available to getRequestId() while next() runs', () => {
     const req = {
       headers: { [REQUEST_ID_HEADER]: 'caller-supplied-id' },
