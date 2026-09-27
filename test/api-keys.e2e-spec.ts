@@ -147,7 +147,7 @@ describe('ApiKeyController (e2e)', () => {
     prismaMock.apiKey.update.mockResolvedValue({});
 
     await request(app.getHttpServer())
-      .delete(`/api-keys/${keyId}`)
+      .post(`/api-keys/${keyId}/revoke`)
       .set('Authorization', 'Bearer valid-token')
       .expect(204);
 
@@ -158,6 +158,42 @@ describe('ApiKeyController (e2e)', () => {
       .get('/test-service')
       .set('x-api-key', 'nrn_whateverkeywasrevoked')
       .expect(401);
+  });
+
+  it('deletes a key, revoking it in the same write', async () => {
+    const keyId = '22222222-2222-4222-8222-222222222222';
+    prismaMock.apiKey.findFirst.mockResolvedValueOnce({
+      id: keyId,
+      userId: user.id,
+      revokedAt: null,
+    });
+    prismaMock.apiKey.update.mockResolvedValue({});
+
+    await request(app.getHttpServer())
+      .delete(`/api-keys/${keyId}`)
+      .set('Authorization', 'Bearer valid-token')
+      .expect(204);
+
+    expect(prismaMock.apiKey.findFirst).toHaveBeenCalledWith({
+      where: { id: keyId, userId: user.id, deletedAt: null },
+    });
+    const [updateArgs] = prismaMock.apiKey.update.mock.calls[0] as [
+      { where: { id: string }; data: { deletedAt: Date; revokedAt: Date } },
+    ];
+    expect(updateArgs.where).toEqual({ id: keyId });
+    expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
+    expect(updateArgs.data.revokedAt).toBe(updateArgs.data.deletedAt);
+  });
+
+  it('returns 404 when deleting a key that is already deleted or not owned by the caller', async () => {
+    prismaMock.apiKey.findFirst.mockResolvedValueOnce(null);
+
+    await request(app.getHttpServer())
+      .delete('/api-keys/22222222-2222-4222-8222-222222222222')
+      .set('Authorization', 'Bearer valid-token')
+      .expect(404);
+
+    expect(prismaMock.apiKey.update).not.toHaveBeenCalled();
   });
 
   it('rejects DELETE /api-keys/:id with a non-UUID id, without querying the DB', async () => {

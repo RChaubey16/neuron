@@ -46,14 +46,15 @@ export class ApiKeyService {
   }
 
   /**
-   * Lists all API keys belonging to a user, most recently created first.
+   * Lists a user's API keys (excluding deleted ones), most recently created
+   * first.
    *
    * @param userId - Id of the owning `User`
    * @returns The user's keys, never including the raw key or its hash
    */
   async findAllForUser(userId: string): Promise<ApiKeyResponseDto[]> {
     const apiKeys = await this.prisma.apiKey.findMany({
-      where: { userId },
+      where: { userId, deletedAt: null },
       orderBy: { createdAt: 'desc' },
     });
 
@@ -61,16 +62,17 @@ export class ApiKeyService {
   }
 
   /**
-   * Revokes (soft-deletes) one of the caller's own API keys.
+   * Revokes one of the caller's own API keys. The key stays listed (marked
+   * revoked) but can no longer authenticate.
    * Throws a NotFoundException if the key doesn't exist, isn't owned by the
-   * caller, or is already revoked.
+   * caller, or is already revoked or deleted.
    *
    * @param userId - Id of the caller, to scope the lookup to their own keys
    * @param id - Id of the `ApiKey` to revoke
    */
   async revoke(userId: string, id: string): Promise<void> {
     const apiKey = await this.prisma.apiKey.findFirst({
-      where: { id, userId, revokedAt: null },
+      where: { id, userId, revokedAt: null, deletedAt: null },
     });
     if (!apiKey) {
       throw new NotFoundException('API key not found');
@@ -79,6 +81,33 @@ export class ApiKeyService {
     await this.prisma.apiKey.update({
       where: { id },
       data: { revokedAt: new Date() },
+    });
+  }
+
+  /**
+   * Deletes one of the caller's own API keys, active or revoked. The row is
+   * soft-deleted so usage logs, short URLs and email jobs keep their
+   * `apiKeyId` attribution; it just stops appearing in the dashboard.
+   * Throws a NotFoundException if the key doesn't exist, isn't owned by the
+   * caller, or is already deleted.
+   *
+   * @param userId - Id of the caller, to scope the lookup to their own keys
+   * @param id - Id of the `ApiKey` to delete
+   */
+  async delete(userId: string, id: string): Promise<void> {
+    const apiKey = await this.prisma.apiKey.findFirst({
+      where: { id, userId, deletedAt: null },
+    });
+    if (!apiKey) {
+      throw new NotFoundException('API key not found');
+    }
+
+    const now = new Date();
+    // ApiKeyGuard only checks `revokedAt`, so deleting an active key must
+    // also revoke it. An already-revoked key keeps its original timestamp.
+    await this.prisma.apiKey.update({
+      where: { id },
+      data: { deletedAt: now, revokedAt: apiKey.revokedAt ?? now },
     });
   }
 }

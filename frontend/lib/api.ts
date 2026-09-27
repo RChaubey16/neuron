@@ -135,6 +135,9 @@ export const api = {
     }),
 
   revokeApiKey: (id: string) =>
+    apiFetch<void>(`/api-keys/${id}/revoke`, { method: 'POST' }),
+
+  deleteApiKey: (id: string) =>
     apiFetch<void>(`/api-keys/${id}`, { method: 'DELETE' }),
 
   getUsage: () => apiFetch<UsageSummary[]>('/usage'),

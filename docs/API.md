@@ -40,7 +40,7 @@ credentials, checked by different guards, for different kinds of caller.
 | Credential | Nest-issued session JWT (self-hosted Google OAuth) | API key |
 | Header | `Authorization: Bearer <token>` | `x-api-key: <raw-key>` |
 | Guard | `JwtAuthGuard` | `ApiKeyGuard` |
-| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/notifications/email` + job/template routes (see [Endpoints](#endpoints)), `POST /api/v1/short-url/shorten` |
+| Routes | `GET /me`, `POST /api-keys`, `GET /api-keys`, `POST /api-keys/:id/revoke`, `DELETE /api-keys/:id`, `GET /usage` | `POST /api/v1/notifications/email` + job/template routes (see [Endpoints](#endpoints)), `POST /api/v1/short-url/shorten` |
 
 ### Getting a session JWT (for dashboard routes, in Postman)
 
@@ -249,10 +249,11 @@ includes the raw key or its hash — only `keyPrefix` for display.
 
 ---
 
-### `DELETE /api-keys/:id`
+### `POST /api-keys/:id/revoke`
 
-Revokes (soft-deletes) one of the caller's own API keys. A revoked key can
-no longer authenticate service requests.
+Revokes one of the caller's own API keys. A revoked key can no longer
+authenticate service requests, but stays in `GET /api-keys` (with
+`revokedAt` set) until it's deleted.
 
 **Auth:** `Authorization: Bearer <jwt>`
 
@@ -268,7 +269,33 @@ no longer authenticate service requests.
 |---|---|
 | `401 Unauthorized` | Missing/invalid bearer token |
 | `400 Bad Request` | `id` isn't a valid UUID |
-| `404 Not Found` | The key doesn't exist, isn't owned by the caller, or is already revoked |
+| `404 Not Found` | The key doesn't exist, isn't owned by the caller, or is already revoked or deleted |
+
+---
+
+### `DELETE /api-keys/:id`
+
+Deletes one of the caller's own API keys, active or revoked. Deleting an
+active key also revokes it, so it stops authenticating immediately. The key
+no longer appears in `GET /api-keys`, but it's soft-deleted: usage logs,
+short URLs and email jobs it created keep pointing at it, so `GET /usage`
+still attributes that history to its `apiKeyId`.
+
+**Auth:** `Authorization: Bearer <jwt>`
+
+**Path params**
+| Param | Type | Notes |
+|---|---|---|
+| `id` | string (uuid v4) | Same as `POST /api-keys/:id/revoke`. |
+
+**Response — `204 No Content`** (empty body)
+
+**Errors**
+| Status | When |
+|---|---|
+| `401 Unauthorized` | Missing/invalid bearer token |
+| `400 Bad Request` | `id` isn't a valid UUID |
+| `404 Not Found` | The key doesn't exist, isn't owned by the caller, or is already deleted |
 
 ---
 

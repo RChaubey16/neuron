@@ -6,7 +6,7 @@ import { api, type ApiKey, type CreatedApiKey } from '@/lib/api';
 import { CreatedKeyModal } from './created-key-modal';
 import { QueryStateCard } from './query-state-card';
 import { TableSkeleton } from './table-skeleton';
-import { Ban, KeyRound, Plus, TriangleAlert } from 'lucide-react';
+import { Ban, KeyRound, Plus, Trash2, TriangleAlert } from 'lucide-react';
 
 function StatusBadge({ revoked }: { revoked: boolean }) {
   if (revoked) {
@@ -83,6 +83,11 @@ export function ApiKeysSection() {
     onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteApiKey(id),
+    onSuccess: () => void queryClient.invalidateQueries({ queryKey: ['api-keys'] }),
+  });
+
   const keys: ApiKey[] | undefined = keysQuery.data;
   const isEmpty = keysQuery.status === 'success' && keys?.length === 0;
   const activeCount = keys?.filter((k) => !k.revokedAt).length ?? 0;
@@ -139,6 +144,14 @@ export function ApiKeysSection() {
               <p className="text-sm text-danger">Failed to generate key.</p>
             )}
           </div>
+
+          {(revokeMutation.isError || deleteMutation.isError) && (
+            <p className="text-sm text-danger">
+              {deleteMutation.isError
+                ? 'Failed to delete key.'
+                : 'Failed to revoke key.'}
+            </p>
+          )}
 
           <div className="overflow-hidden rounded-xl border border-border bg-surface">
             {keysQuery.status === 'pending' && (
@@ -198,23 +211,42 @@ export function ApiKeysSection() {
                           <StatusBadge revoked={Boolean(key.revokedAt)} />
                         </td>
                         <td className="px-5 py-4 text-right">
-                          {!key.revokedAt && (
+                          <div className="inline-flex gap-2">
+                            {!key.revokedAt && (
+                              <button
+                                onClick={() => {
+                                  if (
+                                    window.confirm(
+                                      'Revoke this key? This cannot be undone.',
+                                    )
+                                  ) {
+                                    revokeMutation.mutate(key.id);
+                                  }
+                                }}
+                                className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-fg-2 hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
+                              >
+                                <Ban className="h-3 w-3" />
+                                Revoke
+                              </button>
+                            )}
                             <button
                               onClick={() => {
                                 if (
                                   window.confirm(
-                                    'Revoke this key? This cannot be undone.',
+                                    key.revokedAt
+                                      ? 'Delete this key? It will be removed from this list. Its usage history is kept.'
+                                      : 'Delete this key? It will stop working immediately and be removed from this list. Its usage history is kept.',
                                   )
                                 ) {
-                                  revokeMutation.mutate(key.id);
+                                  deleteMutation.mutate(key.id);
                                 }
                               }}
                               className="inline-flex items-center gap-1 rounded-md border border-border px-2.5 py-1 text-xs font-medium text-fg-2 hover:border-danger/40 hover:bg-danger-soft hover:text-danger"
                             >
-                              <Ban className="h-3 w-3" />
-                              Revoke
+                              <Trash2 className="h-3 w-3" />
+                              Delete
                             </button>
-                          )}
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -83,7 +83,7 @@ describe('ApiKeyService', () => {
       const result = await service.findAllForUser('user-1');
 
       expect(prisma.apiKey.findMany).toHaveBeenCalledWith({
-        where: { userId: 'user-1' },
+        where: { userId: 'user-1', deletedAt: null },
         orderBy: { createdAt: 'desc' },
       });
       expect(result).toEqual([
@@ -112,7 +112,12 @@ describe('ApiKeyService', () => {
       await service.revoke('user-1', 'key-1');
 
       expect(prisma.apiKey.findFirst).toHaveBeenCalledWith({
-        where: { id: 'key-1', userId: 'user-1', revokedAt: null },
+        where: {
+          id: 'key-1',
+          userId: 'user-1',
+          revokedAt: null,
+          deletedAt: null,
+        },
       });
       expect(prisma.apiKey.update).toHaveBeenCalledTimes(1);
       const [updateArgs] = prisma.apiKey.update.mock.calls[0] as [
@@ -126,6 +131,57 @@ describe('ApiKeyService', () => {
       prisma.apiKey.findFirst.mockResolvedValue(null);
 
       await expect(service.revoke('user-1', 'key-1')).rejects.toThrow(
+        NotFoundException,
+      );
+      expect(prisma.apiKey.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('delete', () => {
+    type UpdateArgs = {
+      where: { id: string };
+      data: { deletedAt: Date; revokedAt: Date };
+    };
+
+    it('soft-deletes an active key and revokes it in the same write', async () => {
+      prisma.apiKey.findFirst.mockResolvedValue({
+        id: 'key-1',
+        userId: 'user-1',
+        revokedAt: null,
+      });
+      prisma.apiKey.update.mockResolvedValue({});
+
+      await service.delete('user-1', 'key-1');
+
+      expect(prisma.apiKey.findFirst).toHaveBeenCalledWith({
+        where: { id: 'key-1', userId: 'user-1', deletedAt: null },
+      });
+      const [updateArgs] = prisma.apiKey.update.mock.calls[0] as [UpdateArgs];
+      expect(updateArgs.where).toEqual({ id: 'key-1' });
+      expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
+      expect(updateArgs.data.revokedAt).toBe(updateArgs.data.deletedAt);
+    });
+
+    it('keeps the original revokedAt when deleting an already-revoked key', async () => {
+      const revokedAt = new Date('2026-09-01T00:00:00Z');
+      prisma.apiKey.findFirst.mockResolvedValue({
+        id: 'key-1',
+        userId: 'user-1',
+        revokedAt,
+      });
+      prisma.apiKey.update.mockResolvedValue({});
+
+      await service.delete('user-1', 'key-1');
+
+      const [updateArgs] = prisma.apiKey.update.mock.calls[0] as [UpdateArgs];
+      expect(updateArgs.data.revokedAt).toBe(revokedAt);
+      expect(updateArgs.data.deletedAt).toBeInstanceOf(Date);
+    });
+
+    it('throws NotFoundException when the key does not exist, is already deleted, or is not owned by the caller', async () => {
+      prisma.apiKey.findFirst.mockResolvedValue(null);
+
+      await expect(service.delete('user-1', 'key-1')).rejects.toThrow(
         NotFoundException,
       );
       expect(prisma.apiKey.update).not.toHaveBeenCalled();

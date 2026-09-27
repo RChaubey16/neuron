@@ -34,6 +34,10 @@ model ApiKey {
   createdAt  DateTime  @default(now())
   lastUsedAt DateTime?
   revokedAt  DateTime?
+  /// Set when the owner deletes the key from the dashboard. Soft delete, so
+  /// usage logs, short URLs and email jobs keep their `apiKeyId` attribution.
+  /// Deleting also sets `revokedAt`, so the key stops authenticating.
+  deletedAt  DateTime?
 
   user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
   usageLogs UsageLog[]
