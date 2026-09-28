@@ -2,6 +2,7 @@ import 'reflect-metadata';
 import { plainToInstance } from 'class-transformer';
 import {
   IsEmail,
+  IsIn,
   IsInt,
   IsOptional,
   IsString,
@@ -58,6 +59,13 @@ class EnvironmentVariables {
 
   @IsEmail()
   RESEND_FROM_EMAIL: string;
+
+  // A string, not a boolean: enableImplicitConversion would turn "false"
+  // into true. Local development only — lets webhooks target http and
+  // private hosts (see src/webhooks/delivery/target-guard.ts).
+  @IsOptional()
+  @IsIn(['true', 'false'])
+  WEBHOOKS_ALLOW_PRIVATE_TARGETS?: string;
 }
 
 /**

@@ -1,4 +1,10 @@
-import { Bell, ChevronRight, Link2, type LucideIcon } from 'lucide-react';
+import {
+  Bell,
+  ChevronRight,
+  Link2,
+  Webhook,
+  type LucideIcon,
+} from 'lucide-react';
 import { API_URL } from '@/lib/api';
 import { CodeBlock } from './curl-example';
 
@@ -105,6 +111,76 @@ const SERVICES: ServiceInfo[] = [
   "resendId": null,
   "createdAt": "2026-09-15T12:00:00.000Z",
   "updatedAt": "2026-09-15T12:00:00.000Z"
+}`,
+    },
+  },
+  {
+    name: 'Webhooks',
+    description:
+      'Signed POSTs to your app when an email is sent or permanently fails, retried with backoff. Endpoints are shared by all your keys.',
+    status: 'Generally available',
+    icon: Webhook,
+    endpoints: [
+      {
+        method: 'POST',
+        path: '/api/v1/webhooks/endpoints',
+        description: 'Register an endpoint (returns its signing secret once)',
+      },
+      {
+        method: 'GET',
+        path: '/api/v1/webhooks/endpoints',
+        description: 'List endpoints',
+      },
+      {
+        method: 'GET',
+        path: '/api/v1/webhooks/endpoints/:endpointId',
+        description: 'Get an endpoint',
+      },
+      {
+        method: 'PATCH',
+        path: '/api/v1/webhooks/endpoints/:endpointId',
+        description: 'Change URL, events, or enable/disable',
+      },
+      {
+        method: 'DELETE',
+        path: '/api/v1/webhooks/endpoints/:endpointId',
+        description: 'Delete an endpoint',
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/webhooks/endpoints/:endpointId/rotate-secret',
+        description: 'Replace the signing secret',
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/webhooks/endpoints/:endpointId/test',
+        description: 'Send a webhook.test event',
+      },
+      {
+        method: 'GET',
+        path: '/api/v1/webhooks/deliveries',
+        description: 'Delivery log (optional ?endpointId=)',
+      },
+      {
+        method: 'POST',
+        path: '/api/v1/webhooks/deliveries/:deliveryId/retry',
+        description: 'Retry a failed delivery',
+      },
+    ],
+    example: {
+      curl: `curl -X POST ${API_URL}/api/v1/webhooks/endpoints \\
+  -H "x-api-key: YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{"url": "https://your-app.com/webhooks/neuron", "events": ["email.sent", "email.failed"]}'`,
+      response: `{
+  "id": "6f1c...-uuid",
+  "url": "https://your-app.com/webhooks/neuron",
+  "description": null,
+  "events": ["email.sent", "email.failed"],
+  "enabled": true,
+  "secret": "whsec_...",
+  "createdAt": "2026-09-28T12:00:00.000Z",
+  "updatedAt": "2026-09-28T12:00:00.000Z"
 }`,
     },
   },

@@ -6,6 +6,7 @@ import { HealthController } from '../health/health.controller';
 import { UsageController } from '../usage/usage.controller';
 import { ShortUrlController } from '../short-url/short-url.controller';
 import { NotificationsController } from '../notifications/notifications.controller';
+import { WebhooksController } from '../webhooks/webhooks.controller';
 
 /**
  * Regression test for the API versioning convention (see the Architecture
@@ -27,6 +28,7 @@ const ALL_CONTROLLERS = [
   UsageController,
   ShortUrlController,
   NotificationsController,
+  WebhooksController,
 ];
 
 interface RouteInfo {

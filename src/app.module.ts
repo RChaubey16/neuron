@@ -12,6 +12,7 @@ import { HealthModule } from './health/health.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { UsageModule } from './usage/usage.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 import { ShortUrlModule } from './short-url/short-url.module';
 import { validate } from './config/env.validation';
 
@@ -36,6 +37,7 @@ import { validate } from './config/env.validation';
     ApiKeyModule,
     UsageModule,
     NotificationsModule,
+    WebhooksModule,
     // Must stay last: ShortUrlController's GET /:code is a catch-all
     // single-segment route, and Nest/Express match routes in registration
     // order rather than by specificity.

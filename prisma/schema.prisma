@@ -17,10 +17,12 @@ model User {
   email     String   @unique
   createdAt DateTime @default(now())
 
-  apiKeys   ApiKey[]
-  shortUrls ShortUrl[]
-  emailJobs EmailJob[]
-  usageLogs UsageLog[]
+  apiKeys           ApiKey[]
+  shortUrls         ShortUrl[]
+  emailJobs         EmailJob[]
+  usageLogs         UsageLog[]
+  webhookEndpoints  WebhookEndpoint[]
+  webhookDeliveries WebhookDelivery[]
 }
 
 /// Only the hash of a generated key is ever stored — the raw key is returned
@@ -118,4 +120,58 @@ model EmailJob {
 
   @@index([apiKeyId])
   @@index([userId])
+}
+
+/// An HTTPS endpoint a user has registered to receive Neuron events (see
+/// docs/2026-09-28-webhooks-design.md). Owned by the user rather than an API
+/// key, so events from any of the user's keys fan out to it. `secret` is
+/// stored in plaintext — unlike an API key it can't be hashed, since every
+/// delivery is HMAC-signed with it — and is only returned on creation and
+/// rotation. Soft-deleted via `deletedAt` so deliveries keep their endpoint.
+model WebhookEndpoint {
+  id          String    @id @default(uuid())
+  userId      String
+  url         String
+  description String?
+  events      String[]
+  secret      String
+  disabledAt  DateTime?
+  deletedAt   DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  user       User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries WebhookDelivery[]
+
+  @@index([userId])
+}
+
+enum WebhookDeliveryStatus {
+  PENDING
+  SUCCEEDED
+  FAILED
+}
+
+/// One event sent to one endpoint. `id` doubles as the BullMQ job id and
+/// the `webhook-id` header, so it stays stable across retries and a
+/// receiver can use it to dedupe.
+model WebhookDelivery {
+  id             String                @id @default(uuid())
+  endpointId     String
+  userId         String
+  eventType      String
+  payload        Json
+  status         WebhookDeliveryStatus @default(PENDING)
+  attemptsMade   Int                   @default(0)
+  responseStatus Int?
+  error          String?
+  lastAttemptAt  DateTime?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+
+  endpoint WebhookEndpoint @relation(fields: [endpointId], references: [id], onDelete: Cascade)
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([endpointId, createdAt])
+  @@index([userId, createdAt])
 }

@@ -6,16 +6,47 @@ import { EmailProcessor } from './email.processor';
 import { RESEND_CLIENT } from '../providers/resend-client.provider';
 import { CreateEmailDto } from '../dto/create-email.dto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WebhooksService } from '../../webhooks/webhooks.service';
+
+const updatedRow = {
+  id: 'job-1',
+  userId: 'user-1',
+  apiKeyId: 'key-1',
+  status: 'SENT',
+  to: ['recipient@example.com'],
+  subject: 'Hi',
+  body: '<p>Hello</p>',
+  error: null,
+  attemptsMade: 1,
+  resendId: 'email-1',
+  createdAt: new Date('2026-09-28T00:00:00Z'),
+  updatedAt: new Date('2026-09-28T00:00:01Z'),
+};
+
+const expectedEventData = {
+  id: 'job-1',
+  apiKeyId: 'key-1',
+  status: 'SENT',
+  to: ['recipient@example.com'],
+  subject: 'Hi',
+  error: null,
+  attemptsMade: 1,
+  resendId: 'email-1',
+  createdAt: '2026-09-28T00:00:00.000Z',
+  updatedAt: '2026-09-28T00:00:01.000Z',
+};
 
 describe('EmailProcessor', () => {
   let processor: EmailProcessor;
   let resend: { emails: { send: jest.Mock } };
   let prisma: { emailJob: { update: jest.Mock; updateMany: jest.Mock } };
+  let webhooks: { emit: jest.Mock };
 
   beforeEach(async () => {
     resend = { emails: { send: jest.fn() } };
     prisma = { emailJob: { update: jest.fn(), updateMany: jest.fn() } };
-    prisma.emailJob.update.mockResolvedValue({});
+    prisma.emailJob.update.mockResolvedValue(updatedRow);
+    webhooks = { emit: jest.fn().mockResolvedValue(undefined) };
     prisma.emailJob.updateMany.mockResolvedValue({ count: 1 });
 
     const module: TestingModule = await Test.createTestingModule({
@@ -27,6 +58,7 @@ describe('EmailProcessor', () => {
           useValue: { getOrThrow: () => 'notifications@neuron.test' },
         },
         { provide: PrismaService, useValue: prisma },
+        { provide: WebhooksService, useValue: webhooks },
       ],
     }).compile();
 
@@ -148,7 +180,37 @@ describe('EmailProcessor', () => {
       });
     });
 
-    it('logs an error when the update fails, without throwing', async () => {
+    it('emits email.sent to the owner with the updated row', async () => {
+      const job = { id: 'job-1' } as Job<CreateEmailDto>;
+
+      await processor.onCompleted(job, { resendId: 'email-1' });
+
+      expect(webhooks.emit).toHaveBeenCalledWith(
+        'user-1',
+        'email.sent',
+        expectedEventData,
+      );
+    });
+
+    it('still runs the update when it is a lazy thenable (PrismaPromise), and emits after it', async () => {
+      // A PrismaPromise only executes once subscribed to — a mock that
+      // resolves eagerly would hide a regression back to `void update()`.
+      const executed = jest.fn();
+      prisma.emailJob.update.mockReturnValue({
+        then: (resolve: (row: typeof updatedRow) => unknown) => {
+          executed();
+          return Promise.resolve(updatedRow).then(resolve);
+        },
+      });
+      const job = { id: 'job-1' } as Job<CreateEmailDto>;
+
+      await processor.onCompleted(job, { resendId: 'email-1' });
+
+      expect(executed).toHaveBeenCalled();
+      expect(webhooks.emit).toHaveBeenCalled();
+    });
+
+    it('logs an error when the update fails, without throwing or emitting', async () => {
       const errorSpy = jest
         .spyOn(Logger.prototype, 'error')
         .mockImplementation();
@@ -158,6 +220,7 @@ describe('EmailProcessor', () => {
       await expect(
         processor.onCompleted(job, { resendId: 'email-1' }),
       ).resolves.toBeUndefined();
+      expect(webhooks.emit).not.toHaveBeenCalled();
       expect(errorSpy).toHaveBeenCalledWith(
         expect.stringContaining('job-1'),
         expect.anything(),
@@ -185,6 +248,11 @@ describe('EmailProcessor', () => {
           attemptsMade: 3,
         },
       });
+      expect(webhooks.emit).toHaveBeenCalledWith(
+        'user-1',
+        'email.failed',
+        expectedEventData,
+      );
     });
 
     it('reverts the EmailJob to QUEUED when attempts remain', async () => {
@@ -204,6 +272,7 @@ describe('EmailProcessor', () => {
           attemptsMade: 1,
         },
       });
+      expect(webhooks.emit).not.toHaveBeenCalled();
     });
 
     it('does nothing if the job is undefined', async () => {
