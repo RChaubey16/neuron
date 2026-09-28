@@ -158,8 +158,20 @@ Ideas to slot in later using the same module pattern (`Module + Controller + Ser
 - SMS notifications
 - File/image upload & storage (Supabase Storage)
 - Simple analytics/event tracking endpoint
-- Webhooks-out (notify external apps of events)
 - Scheduled/cron jobs as a service (like a hosted cron trigger)
+
+### Webhooks-out (notify external apps of events)
+
+Design: `docs/2026-09-28-webhooks-design.md`.
+
+- [x] `WebhookEndpoint` + `WebhookDelivery` models and migration
+- [x] Standard Webhooks signing + SSRF-safe delivery (`WebhookProcessor` on a `webhook` BullMQ queue)
+- [x] Endpoint/delivery management routes, machine (`/api/v1/webhooks/...`) and dashboard (`/webhooks/...`)
+- [x] Emit `email.sent` / `email.failed` from `EmailProcessor`
+- [x] Dashboard Webhooks page
+- [x] Docs (`API.md`, `CLAUDE.md`)
+
+**Exit criteria:** An app registers an endpoint, queues an email, and receives a verifiable signed `email.sent` webhook.
 
 ---
 

@@ -143,6 +143,47 @@ export type EmailTemplatePreview = {
   urlVariables: string[];
 };
 
+/** Mirrors SUBSCRIBABLE_WEBHOOK_EVENTS in src/webhooks/webhook-events.ts. */
+export const WEBHOOK_EVENTS = ['email.sent', 'email.failed'] as const;
+
+export type WebhookEvent = (typeof WEBHOOK_EVENTS)[number];
+
+export type WebhookEndpoint = {
+  id: string;
+  url: string;
+  description: string | null;
+  events: string[];
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Only returned by create and rotate-secret — the secret is never retrievable afterwards. */
+export type WebhookEndpointWithSecret = WebhookEndpoint & { secret: string };
+
+export type WebhookDeliveryStatus = 'PENDING' | 'SUCCEEDED' | 'FAILED';
+
+export type WebhookDelivery = {
+  id: string;
+  endpointId: string;
+  eventType: string;
+  payload: unknown;
+  status: WebhookDeliveryStatus;
+  attemptsMade: number;
+  responseStatus: number | null;
+  error: string | null;
+  lastAttemptAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type WebhookDeliveryList = {
+  items: WebhookDelivery[];
+  total: number;
+  limit: number;
+  offset: number;
+};
+
 export const api = {
   getMe: () => apiFetch<User>('/me'),
 
@@ -199,6 +240,55 @@ export const api = {
 
   cancelEmail: (jobId: string) =>
     apiFetch<void>(`/notifications/email/${jobId}`, { method: 'DELETE' }),
+
+  listWebhookEndpoints: () =>
+    apiFetch<WebhookEndpoint[]>('/webhooks/endpoints'),
+
+  createWebhookEndpoint: (payload: {
+    url: string;
+    description?: string;
+    events: WebhookEvent[];
+  }) =>
+    apiFetch<WebhookEndpointWithSecret>('/webhooks/endpoints', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateWebhookEndpoint: (
+    endpointId: string,
+    payload: {
+      url?: string;
+      description?: string | null;
+      events?: WebhookEvent[];
+      enabled?: boolean;
+    },
+  ) =>
+    apiFetch<WebhookEndpoint>(`/webhooks/endpoints/${endpointId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteWebhookEndpoint: (endpointId: string) =>
+    apiFetch<void>(`/webhooks/endpoints/${endpointId}`, { method: 'DELETE' }),
+
+  rotateWebhookSecret: (endpointId: string) =>
+    apiFetch<WebhookEndpointWithSecret>(
+      `/webhooks/endpoints/${endpointId}/rotate-secret`,
+      { method: 'POST' },
+    ),
+
+  sendWebhookTest: (endpointId: string) =>
+    apiFetch<WebhookDelivery>(`/webhooks/endpoints/${endpointId}/test`, {
+      method: 'POST',
+    }),
+
+  listWebhookDeliveries: (params?: { limit?: number; offset?: number }) =>
+    apiFetch<WebhookDeliveryList>(`/webhooks/deliveries${buildQuery(params)}`),
+
+  retryWebhookDelivery: (deliveryId: string) =>
+    apiFetch<WebhookDelivery>(`/webhooks/deliveries/${deliveryId}/retry`, {
+      method: 'POST',
+    }),
 };
 
 export function googleSignInUrl(): string {

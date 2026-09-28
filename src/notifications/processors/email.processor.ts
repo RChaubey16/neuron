@@ -6,6 +6,8 @@ import type { Resend } from 'resend';
 import { RESEND_CLIENT } from '../providers/resend-client.provider';
 import { CreateEmailDto } from '../dto/create-email.dto';
 import { PrismaService } from '../../prisma/prisma.service';
+import { WebhooksService } from '../../webhooks/webhooks.service';
+import type { EmailJob } from '../../../generated/prisma';
 
 interface EmailJobResult {
   resendId: string | undefined;
@@ -20,6 +22,7 @@ export class EmailProcessor extends WorkerHost {
     @Inject(RESEND_CLIENT) private readonly resend: Resend,
     configService: ConfigService,
     private readonly prisma: PrismaService,
+    private readonly webhooks: WebhooksService,
   ) {
     super();
     this.fromEmail = configService.getOrThrow<string>('RESEND_FROM_EMAIL');
@@ -102,7 +105,8 @@ export class EmailProcessor extends WorkerHost {
 
   /**
    * Marks the corresponding EmailJob SENT once BullMQ confirms the job
-   * completed, recording the Resend delivery id returned by process().
+   * completed, recording the Resend delivery id returned by process(), then
+   * emits `email.sent` to the owner's webhook endpoints.
    * See onActive's note on why this write is `.catch()`-guarded.
    */
   @OnWorkerEvent('completed')
@@ -118,6 +122,11 @@ export class EmailProcessor extends WorkerHost {
         where: { id: job.id },
         data: { status: 'SENT', resendId: result.resendId, error: null },
       })
+      // Chained off the update (not a separate query) so the event carries
+      // the row as written. emit() never throws.
+      .then((row) =>
+        this.webhooks.emit(row.userId, 'email.sent', this.toEventData(row)),
+      )
       .catch((error: unknown) => {
         this.logger.error(
           `Failed to sync EmailJob ${job.id} to SENT`,
@@ -132,7 +141,8 @@ export class EmailProcessor extends WorkerHost {
    * last one — `job.attemptsMade` vs `job.opts.attempts` tells apart a
    * permanent failure (all attempts exhausted, EmailJob -> FAILED) from one
    * that will still be retried (EmailJob reverted to QUEUED, since it's
-   * back in BullMQ's delayed set awaiting its backoff).
+   * back in BullMQ's delayed set awaiting its backoff). Only a permanent
+   * failure emits `email.failed` to the owner's webhook endpoints.
    * See onActive's note on why this write is `.catch()`-guarded.
    */
   @OnWorkerEvent('failed')
@@ -153,11 +163,40 @@ export class EmailProcessor extends WorkerHost {
           attemptsMade: job.attemptsMade,
         },
       })
+      .then((row) =>
+        exhausted
+          ? this.webhooks.emit(
+              row.userId,
+              'email.failed',
+              this.toEventData(row),
+            )
+          : undefined,
+      )
       .catch((updateError: unknown) => {
         this.logger.error(
           `Failed to sync EmailJob ${job.id} to ${exhausted ? 'FAILED' : 'QUEUED'}`,
           updateError instanceof Error ? updateError.stack : updateError,
         );
       });
+  }
+
+  /**
+   * The `data` object of an email.* webhook event: the same fields the
+   * status endpoint returns (no body), plus the originating apiKeyId so a
+   * receiver can tell which app queued it (null for a dashboard send).
+   */
+  private toEventData(job: EmailJob) {
+    return {
+      id: job.id,
+      apiKeyId: job.apiKeyId,
+      status: job.status,
+      to: job.to,
+      subject: job.subject,
+      error: job.error,
+      attemptsMade: job.attemptsMade,
+      resendId: job.resendId,
+      createdAt: job.createdAt.toISOString(),
+      updatedAt: job.updatedAt.toISOString(),
+    };
   }
 }

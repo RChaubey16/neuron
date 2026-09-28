@@ -640,6 +640,139 @@ substitute `401 Unauthorized | Missing/invalid bearer token` for
 
 ---
 
+### Webhooks — `/api/v1/webhooks/...`
+
+Register an HTTPS endpoint and Neuron POSTs a signed JSON event to it when
+something happens. Design: `docs/2026-09-28-webhooks-design.md`.
+
+**Auth:** `x-api-key: <raw-api-key>`. Endpoints belong to the key's
+**user**, not the key: any of the user's keys can manage them, and events
+from jobs created by any key (or the dashboard) reach every subscribed
+endpoint. Each event's `data.apiKeyId` says which key it came from (`null`
+for a dashboard send).
+
+**Events**
+| Type | Fires when |
+|---|---|
+| `email.sent` | An email job reaches `SENT` |
+| `email.failed` | An email job reaches `FAILED` after its last retry (not on intermediate failures) |
+| `webhook.test` | You call `POST .../endpoints/:endpointId/test`; sent to that endpoint only, and can't be subscribed to |
+
+**Routes**
+| Method & path | Body / query | Success |
+|---|---|---|
+| `POST /api/v1/webhooks/endpoints` | `{ url, events, description? }` | `201`, endpoint **plus `secret`** (shown only here and on rotate) |
+| `GET /api/v1/webhooks/endpoints` | — | `200`, array of endpoints (no secrets) |
+| `GET /api/v1/webhooks/endpoints/:endpointId` | — | `200`, endpoint |
+| `PATCH /api/v1/webhooks/endpoints/:endpointId` | any of `{ url, events, description (null clears), enabled }` | `200`, endpoint |
+| `DELETE /api/v1/webhooks/endpoints/:endpointId` | — | `204`. Soft delete; delivery history is kept |
+| `POST /api/v1/webhooks/endpoints/:endpointId/rotate-secret` | — | `200`, endpoint **plus new `secret`**; the old one stops working immediately |
+| `POST /api/v1/webhooks/endpoints/:endpointId/test` | — | `202`, the queued delivery |
+| `GET /api/v1/webhooks/deliveries` | `?endpointId=&limit=&offset=` (same pagination defaults as `GET /api/v1/short-url`) | `200`, `{ items, total, limit, offset }` |
+| `POST /api/v1/webhooks/deliveries/:deliveryId/retry` | — | `200`, the delivery, back to `PENDING` with fresh attempts |
+
+**Rate limit:** 10 requests / 60s on writes, 5 / 60s on `.../test`; global default on reads.
+
+**Endpoint shape**
+```json
+{
+  "id": "6f1c...-uuid",
+  "url": "https://your-app.com/webhooks/neuron",
+  "description": null,
+  "events": ["email.sent", "email.failed"],
+  "enabled": true,
+  "createdAt": "2026-09-28T12:00:00.000Z",
+  "updatedAt": "2026-09-28T12:00:00.000Z"
+}
+```
+
+**Delivery shape:** `id`, `endpointId`, `eventType`, `payload` (the exact
+body sent), `status` (`PENDING` | `SUCCEEDED` | `FAILED`), `attemptsMade`,
+`responseStatus` (the receiver's last HTTP status, or `null` on a network
+error), `error`, `lastAttemptAt`, `createdAt`, `updatedAt`.
+
+**URL rules:** must be `https`, can't include credentials, and can't point
+at `localhost` or a private, loopback or link-local address. At delivery
+time the resolved IP is checked too, so a public hostname that resolves to a
+private address fails without retrying. For local development only,
+`WEBHOOKS_ALLOW_PRIVATE_TARGETS=true` lifts these rules and allows `http`.
+At most 10 endpoints per user.
+
+**Errors**
+| Status | When |
+|---|---|
+| `400 Bad Request` | Invalid body/params, unknown event type, or a disallowed URL (the message says which rule) |
+| `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
+| `404 Not Found` | No endpoint/delivery with that id for this user (or the endpoint is deleted) |
+| `409 Conflict` | 10-endpoint limit reached; test event to a disabled endpoint; retrying a delivery that isn't `FAILED`, whose endpoint is deleted/disabled, or that a concurrent retry already took |
+| `503 Service Unavailable` | Test event or retry couldn't be queued (Redis down). The delivery is left `FAILED` and can be retried |
+
+#### What your endpoint receives
+
+A `POST` with `content-type: application/json`, following
+[Standard Webhooks](https://www.standardwebhooks.com/):
+
+```
+webhook-id: 0a9b8c7d-...        # delivery id; the same on every retry, so use it to dedupe
+webhook-timestamp: 1790596800   # unix seconds of this attempt
+webhook-signature: v1,<base64>  # HMAC-SHA256 of "<id>.<timestamp>.<raw body>"
+```
+
+```json
+{
+  "type": "email.sent",
+  "timestamp": "2026-09-28T12:00:05.000Z",
+  "data": {
+    "id": "9c1e...-uuid",
+    "apiKeyId": "b2f4...-uuid",
+    "status": "SENT",
+    "to": ["user@example.com"],
+    "subject": "Hello",
+    "error": null,
+    "attemptsMade": 1,
+    "resendId": "re_123",
+    "createdAt": "2026-09-28T12:00:00.000Z",
+    "updatedAt": "2026-09-28T12:00:05.000Z"
+  }
+}
+```
+
+Respond with any `2xx` within 10 seconds. Anything else (including a
+redirect, which isn't followed) is retried: 6 attempts in total, backing off
+30s, 1m, 2m, 4m, 8m.
+
+To verify a request, use a Standard Webhooks library
+(`npm i standardwebhooks`):
+
+```ts
+import { Webhook } from 'standardwebhooks';
+
+// `secret` is the endpoint's whsec_... value. Pass the raw request body
+// (not re-serialized JSON), or the signature won't match.
+const event = new Webhook(secret).verify(rawBody, {
+  'webhook-id': req.headers['webhook-id'],
+  'webhook-timestamp': req.headers['webhook-timestamp'],
+  'webhook-signature': req.headers['webhook-signature'],
+});
+```
+
+Or by hand: base64-decode the secret after `whsec_`, compute
+`HMAC-SHA256(key, "<webhook-id>.<webhook-timestamp>.<raw body>")`, and compare
+its base64 form to the value after `v1,` in constant time. Also reject
+timestamps more than a few minutes old.
+
+---
+
+### `/webhooks/...` (dashboard)
+
+Dashboard-native counterparts of every route above, minus `GET
+/webhooks/endpoints/:endpointId`, at the same paths without the `/api/v1`
+prefix (e.g. `POST /webhooks/endpoints`, `GET /webhooks/deliveries`).
+**Auth:** `Authorization: Bearer <jwt>`. Bodies, responses and errors are
+identical; substitute a missing/invalid bearer token for the `401` case.
+
+---
+
 ### `POST /api/v1/short-url/shorten`
 
 Creates a shortened URL owned by the calling API key. The first real

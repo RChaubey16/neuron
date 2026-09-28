@@ -12,6 +12,7 @@ import {
   Mail,
   Menu,
   Settings,
+  Webhook,
   X,
   type LucideIcon,
 } from 'lucide-react';
@@ -26,6 +27,7 @@ const NAV_GROUPS = [
     items: [
       { href: '/dashboard/urls', label: 'URLs', icon: Link2 },
       { href: '/dashboard/notifications', label: 'Notifications', icon: Mail },
+      { href: '/dashboard/webhooks', label: 'Webhooks', icon: Webhook },
     ],
   },
   {
