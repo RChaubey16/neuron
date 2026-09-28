@@ -1,11 +1,11 @@
 import {
   ConflictException,
+  Inject,
   Injectable,
   Logger,
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { InjectQueue } from '@nestjs/bullmq';
 import { Queue } from 'bullmq';
 import { Prisma } from '../../generated/prisma';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,6 +16,7 @@ import { SendTemplatedEmailDto } from './dto/send-templated-email.dto';
 import { EmailTemplateSummaryDto } from './dto/email-template-summary.dto';
 import { EmailTemplatePreviewDto } from './dto/email-template-preview.dto';
 import { EMAIL_TEMPLATES } from './templates/templates';
+import { EMAIL_QUEUE } from './providers/email-queue.provider';
 import { renderTemplate } from './templates/render-template';
 import type { EmailJob } from '../../generated/prisma';
 
@@ -24,7 +25,7 @@ export class NotificationsService {
   private readonly logger = new Logger(NotificationsService.name);
 
   constructor(
-    @InjectQueue('email') private readonly emailQueue: Queue<CreateEmailDto>,
+    @Inject(EMAIL_QUEUE) private readonly emailQueue: Queue<CreateEmailDto>,
     private readonly prisma: PrismaService,
   ) {}
 
@@ -36,9 +37,8 @@ export class NotificationsService {
    * BullMQ's own retry/backoff on the job, not by this method.
    * Throws a ServiceUnavailableException if the job couldn't be queued
    * (see createAndQueueJob).
-   * Note: if Redis is unreachable, the queue add below does NOT reliably
-   * throw — ioredis's offline-queue buffering can cause it to hang instead
-   * of failing fast (known gap, not yet fixed; see CLAUDE.md's gotchas).
+   * The queue runs on a connection with its offline queue disabled, so a
+   * Redis outage makes the add fail immediately rather than hang.
    *
    * @param owner - Id of the owning user, plus the ApiKey id when a machine
    *   made the request (omitted for a dashboard-native call)

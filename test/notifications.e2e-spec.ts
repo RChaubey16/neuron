@@ -1,7 +1,7 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { JwtService } from '@nestjs/jwt';
-import { getQueueToken } from '@nestjs/bullmq';
+import { EMAIL_QUEUE } from './../src/notifications/providers/email-queue.provider';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
@@ -68,7 +68,7 @@ describe('Notifications (e2e)', () => {
     })
       .overrideProvider(PrismaService)
       .useValue(prismaMock)
-      .overrideProvider(getQueueToken('email'))
+      .overrideProvider(EMAIL_QUEUE)
       .useValue(emailQueueMock)
       .overrideProvider(EmailProcessor)
       .useValue({})

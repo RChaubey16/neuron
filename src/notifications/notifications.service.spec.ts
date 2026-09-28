@@ -4,7 +4,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
-import { getQueueToken } from '@nestjs/bullmq';
+import { EMAIL_QUEUE } from './providers/email-queue.provider';
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
@@ -57,7 +57,7 @@ describe('NotificationsService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         NotificationsService,
-        { provide: getQueueToken('email'), useValue: queue },
+        { provide: EMAIL_QUEUE, useValue: queue },
         { provide: PrismaService, useValue: prisma },
       ],
     }).compile();
