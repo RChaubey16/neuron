@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { EMAIL_QUEUE } from './providers/email-queue.provider';
 import { Test, TestingModule } from '@nestjs/testing';
+import { Prisma } from '../../generated/prisma';
 import { NotificationsService } from './notifications.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEmailDto } from './dto/create-email.dto';
@@ -374,7 +375,7 @@ describe('NotificationsService', () => {
       const result = await service.retry('key-1', 'job-1');
 
       expect(prisma.emailJob.update).toHaveBeenCalledWith({
-        where: { id: 'job-1' },
+        where: { id: 'job-1', status: 'FAILED' },
         data: { status: 'QUEUED', error: null, attemptsMade: 0 },
       });
       // Removes any stale BullMQ job left behind by removeOnFail retention
@@ -394,6 +395,24 @@ describe('NotificationsService', () => {
       await expect(service.retry('key-1', 'job-1')).rejects.toThrow(
         ConflictException,
       );
+      expect(queue.add).not.toHaveBeenCalled();
+    });
+
+    it('throws ConflictException without re-queuing when a concurrent retry already reset the job', async () => {
+      prisma.emailJob.findFirst.mockResolvedValue({ ...job, status: 'FAILED' });
+      // The status-guarded update matches no row once another retry has
+      // moved the job out of FAILED.
+      prisma.emailJob.update.mockRejectedValue(
+        new Prisma.PrismaClientKnownRequestError('No record found', {
+          code: 'P2025',
+          clientVersion: 'test',
+        }),
+      );
+
+      await expect(service.retry('key-1', 'job-1')).rejects.toThrow(
+        ConflictException,
+      );
+      expect(queue.remove).not.toHaveBeenCalled();
       expect(queue.add).not.toHaveBeenCalled();
     });
 

@@ -141,7 +141,8 @@ export class NotificationsService {
    * Re-queues a permanently failed email job from its originally stored
    * payload, resetting its attempt count.
    * Throws a NotFoundException per the same ownership rule as getStatus.
-   * Throws a ConflictException if the job isn't in a FAILED state.
+   * Throws a ConflictException if the job isn't in a FAILED state, or a
+   * concurrent retry of the same job got there first.
    * Throws a ServiceUnavailableException if it couldn't be re-queued.
    *
    * @param apiKeyId - Id of the ApiKey making the request, for ownership
@@ -158,7 +159,8 @@ export class NotificationsService {
    * a single calling API key, this spans every job the user owns regardless
    * of which key (or none) created it, matching `findAllForUser`'s scoping.
    * Throws a NotFoundException per the same ownership rule as getStatus.
-   * Throws a ConflictException if the job isn't in a FAILED state.
+   * Throws a ConflictException if the job isn't in a FAILED state, or a
+   * concurrent retry of the same job got there first.
    * Throws a ServiceUnavailableException if it couldn't be re-queued.
    *
    * @param userId - Id of the dashboard user, for ownership
@@ -212,10 +214,23 @@ export class NotificationsService {
       throw new ConflictException(`Cannot retry a job in ${job.status} state`);
     }
 
-    const updated = await this.prisma.emailJob.update({
-      where: { id: jobId },
-      data: { status: 'QUEUED', error: null, attemptsMade: 0 },
-    });
+    // Guarded by status: 'FAILED' so two concurrent retries (e.g. a
+    // double-click) can't both pass the check above and re-queue the job
+    // twice, the second one overwriting a status the worker already set.
+    const updated = await this.prisma.emailJob
+      .update({
+        where: { id: jobId, status: 'FAILED' },
+        data: { status: 'QUEUED', error: null, attemptsMade: 0 },
+      })
+      .catch((error: unknown) => {
+        if (
+          error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2025'
+        ) {
+          throw new ConflictException('Job is already being retried');
+        }
+        throw error;
+      });
 
     // A previously failed BullMQ job with this same id may still exist in
     // Redis (removeOnFail retains the last 5000) — remove it first so

@@ -1,8 +1,12 @@
 services:
   app:
     build: .
-    ports:
-      - '3000:3000'
+    # Not published on the host: Coolify's Traefik reaches the container
+    # over its Docker network. Publishing it would expose plain HTTP on the
+    # VPS's public IP, bypassing TLS and letting a direct caller forge the
+    # X-Forwarded-For header main.ts's `trust proxy` relies on.
+    expose:
+      - '3000'
     environment:
       PORT: ${PORT}
       FRONTEND_URL: ${FRONTEND_URL}
