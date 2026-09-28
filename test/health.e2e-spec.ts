@@ -4,6 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 import { PrismaService } from './../src/prisma/prisma.service';
+import { PRODUCER_REDIS } from './../src/redis/redis.module';
 
 describe('HealthController (e2e)', () => {
   let app: INestApplication<App>;
@@ -36,7 +37,20 @@ describe('HealthController (e2e)', () => {
     }
   });
 
+  // CI has no Postgres or Redis, so both probes are stubbed on the real
+  // instances the app resolved; the timeout/failure handling itself is
+  // covered by health.service.spec.ts.
+  const stubDependencies = () => ({
+    database: jest
+      .spyOn(app.get(PrismaService), '$queryRaw')
+      .mockResolvedValue([{ '?column?': 1 }]),
+    redis: jest
+      .spyOn(app.get(PRODUCER_REDIS), 'ping')
+      .mockResolvedValue('PONG'),
+  });
+
   it('/health/ready (GET) returns 200 when Postgres and Redis respond', () => {
+    stubDependencies();
     return request(app.getHttpServer())
       .get('/health/ready')
       .expect(200)
@@ -44,9 +58,9 @@ describe('HealthController (e2e)', () => {
   });
 
   it('/health/ready (GET) returns 503 with the failing check when a dependency is down', async () => {
-    jest
-      .spyOn(app.get(PrismaService), '$queryRaw')
-      .mockRejectedValueOnce(new Error('connection refused'));
+    stubDependencies().database.mockRejectedValue(
+      new Error('connection refused'),
+    );
 
     await request(app.getHttpServer())
       .get('/health/ready')
