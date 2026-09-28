@@ -140,18 +140,23 @@ working end-to-end.
   token) — the "a separate live app successfully calls this in production"
   milestone hasn't happened.
 - **No uptime monitoring or alerting.** If the backend goes down, nothing
-  currently notices except a person checking.
+  currently notices except a person checking. The endpoint for it exists
+  (`GET /health/ready` checks the database and Redis); nothing calls it on
+  a schedule yet.
 - **One dev/prod environment, not separate ones.** There's a single Supabase
   project and a single Redis instance — no staging tier yet.
-- **A Redis outage doesn't fail loudly.** If Redis is unreachable, queuing a
-  notification hangs instead of returning a clean error — a known gap, not
-  yet fixed.
 
 None of these block using what's built; they're the honest list of what
 "production-ready" still doesn't fully mean here yet.
 
 ## Where to look next
 
+- **Want to understand how the technology works, without the jargon?** →
+  [`HOW-IT-WORKS.md`](HOW-IT-WORKS.md) — each piece of the stack, and what
+  happens step by step when a request comes in.
+- **Working on the code?** → [`ARCHITECTURE.md`](ARCHITECTURE.md) — module
+  by module, the request lifecycle, data model, queue design, testing, and
+  deployment.
 - **Want to call the API right now?** → [`API.md`](API.md) — every endpoint,
   with example requests/responses and a Postman walkthrough.
 - **Want the full history of *why* things are built this way, plus every

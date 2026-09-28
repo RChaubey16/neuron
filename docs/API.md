@@ -86,8 +86,8 @@ still need a real `GET /auth/google` login.
 All routes are rate-limited via a global default (**20 requests / 60s**),
 except:
 
-- `GET /health` — exempt, so uptime monitors/liveness probes are never
-  throttled.
+- `GET /health` and `GET /health/ready` — exempt, so uptime
+  monitors/liveness probes are never throttled.
 - `POST /api/v1/notifications/email` — tighter: **10 requests / 60s**.
 - `POST /api/v1/notifications/email/templates/:templateKey/send` — tighter:
   **10 requests / 60s**.
@@ -153,6 +153,25 @@ Liveness check. No auth required, no rate limit.
 **Response — `200 OK`**
 ```json
 { "status": "ok" }
+```
+
+---
+
+### `GET /health/ready`
+
+Readiness check: pings Postgres and Redis in parallel, each with a 2s
+timeout. Point uptime monitors here rather than at `GET /health`, which
+only proves the process is running. No auth required, no rate limit.
+
+**Response — `200 OK`** when every dependency responds
+```json
+{ "status": "ok", "checks": { "database": "up", "redis": "up" } }
+```
+
+**Response — `503 Service Unavailable`** when any dependency fails or times
+out, with the same shape so you can see which one:
+```json
+{ "status": "error", "checks": { "database": "up", "redis": "down" } }
 ```
 
 ---
@@ -383,6 +402,7 @@ chars and isn't needed to check on a job. `status` is one of `QUEUED`,
 | `401 Unauthorized` | Missing `x-api-key` header, or the key is invalid/revoked |
 | `400 Bad Request` | `to` is empty/not emails/over 50 recipients, or `subject`/`body` is empty or over its max length |
 | `429 Too Many Requests` | Rate limit exceeded |
+| `503 Service Unavailable` | Redis is unreachable, so the job couldn't be queued. The job row is kept as `FAILED` (retryable once Redis is back) |
 
 BullMQ retries the underlying send up to 3 times (exponential backoff) if
 Resend rejects it or the send otherwise fails — this all happens after the
@@ -486,6 +506,7 @@ rendered subject)
 | `404 Not Found` | `templateKey` doesn't match a known template |
 | `400 Bad Request` | `to` is empty/not emails/over 50 recipients; or `variables` is missing a required key, has an unexpected extra key, or has a non-string value |
 | `429 Too Many Requests` | Rate limit exceeded |
+| `503 Service Unavailable` | Redis is unreachable, so the job couldn't be queued. The job row is kept as `FAILED` (retryable once Redis is back) |
 
 ---
 
@@ -563,6 +584,7 @@ Re-queues a job that's currently `FAILED`, replaying its originally stored
 | `400 Bad Request` | `jobId` isn't a valid UUID |
 | `404 Not Found` | No job with that id, or it isn't owned by the calling API key |
 | `409 Conflict` | The job isn't currently `FAILED` (e.g. it's `QUEUED`, `SENT`, or already `CANCELLED`) |
+| `503 Service Unavailable` | Redis is unreachable, so the job couldn't be re-queued. It stays `FAILED` |
 
 ---
 
