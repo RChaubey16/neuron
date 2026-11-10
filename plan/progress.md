@@ -9,7 +9,7 @@ Updated after every feature commit.
 ## Current status
 
 -   **Current phase:** Phase 0: Project Foundation
--   **Next up:** Feature 0.4: Health check API (then finish 0.3's Supabase connection check)
+-   **Next up:** Finish Feature 0.3 (connect to the Supabase dev project), then Phase 1, Feature 1.1
 -   **Last updated:** 2026-11-10
 
 ## Waiting on
@@ -31,7 +31,7 @@ Updated after every feature commit.
 | 0.1 Initialize NestJS project | Done | `957403f` | NestJS 12, Node 26, ESM; Oxlint + Vitest (plan updated); `@/*` alias; env validation, `/api/v1` prefix, CORS, validation pipe, exception filter |
 | 0.2 Docker development environment | Done | `156d6ae` | Node 26.13 slim; `dev`/`prod` targets; Corepack 0.36 → pnpm 12.18; node_modules + store in volumes; hot reload works without polling (needs `procps`); prod image non-root, prod deps only |
 | 0.3 Supabase database integration (Prisma) | In progress | `aa0fd72` | Prisma 7.10.1 + `@prisma/adapter-pg`; `PrismaModule`/`PrismaService`; `migrate dev`/`deploy` verified on test Postgres; `docker-compose.test.yml` with `auth.users` stub; `migrate` image target. **Pending:** connect to the Supabase dev project. For 1.3: `migrate dev`'s shadow DB lacks `auth`, so FKs to `auth.users` need a shadow DB with the stub |
-| 0.4 Health check API | Not started | | |
+| 0.4 Health check API | Done | `aa74194` | `GET /api/v1/health` (app + DB, 503 when DB down, 3 s DB timeout), `GET /api/v1/health/live` for container health checks; basic Swagger at `/api/v1/docs` + `/api/v1/openapi.json` (Phase 0 criterion; full docs in 5.5); `@Public()` decorator ready for Phase 1 guards |
 
 ### Phase 1: Authentication System
 
@@ -93,6 +93,7 @@ Newest first. One entry per commit.
 
 | Date | Commit | Summary |
 |---|---|---|
+| 2026-11-10 | `aa74194` | Feature 0.4: health and liveness endpoints, Docker health checks, basic Swagger. |
 | 2026-11-10 | `aa0fd72` | Feature 0.3 (code): Prisma integration, migration workflow, test database. Supabase check pending. |
 | 2026-11-10 | `156d6ae` | Feature 0.2: Dockerfile (dev/prod), docker-compose.yml, .env.example, README with commands. |
 | 2026-11-10 | `957403f` | Feature 0.1: pnpm monorepo and NestJS API scaffold with config, validation, CORS and error handling. |
