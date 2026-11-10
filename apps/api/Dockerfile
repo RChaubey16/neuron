@@ -5,6 +5,7 @@
 #
 #   docker build -f apps/api/Dockerfile --target dev  .   # local development
 #   docker build -f apps/api/Dockerfile --target prod .   # Coolify / production
+#   docker build -f apps/api/Dockerfile --target migrate .  # prisma migrate deploy
 #
 # Debian slim (not Alpine): Prisma's engines need glibc and OpenSSL.
 
@@ -52,6 +53,15 @@ CMD ["pnpm", "start:dev"]
 FROM deps AS build
 COPY apps/api apps/api
 RUN pnpm --filter @neuron/api build
+
+# ---- migrate: one-off job that applies migrations (prisma migrate deploy) -
+# Kept out of the prod image: the Prisma CLI more than doubles its size.
+# Needs DIRECT_URL. Run it before starting a new prod release.
+FROM deps AS migrate
+COPY apps/api/prisma apps/api/prisma
+COPY apps/api/prisma.config.ts apps/api/
+WORKDIR /repo/apps/api
+CMD ["pnpm", "db:deploy"]
 
 # ---- prod-deps: production dependencies only ------------------------------
 FROM base AS prod-deps

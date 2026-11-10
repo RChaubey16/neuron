@@ -3,6 +3,9 @@ import { NodeEnv } from './validation.js';
 export interface AppConfig {
   nodeEnv: NodeEnv;
   port: number;
+  database: {
+    url: string;
+  };
   cors: {
     origins: string[];
   };
@@ -22,6 +25,9 @@ export function parseList(value: string | undefined): string[] {
 export default (): AppConfig => ({
   nodeEnv: (process.env.NODE_ENV as NodeEnv | undefined) ?? NodeEnv.Development,
   port: Number(process.env.PORT ?? 3000),
+  database: {
+    url: process.env.DATABASE_URL ?? '',
+  },
   cors: {
     origins: parseList(process.env.CORS_ORIGINS),
   },

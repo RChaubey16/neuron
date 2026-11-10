@@ -1,0 +1,26 @@
+# Disposable Postgres for integration and e2e tests. Never use a Supabase
+# project for tests. Data lives in tmpfs and disappears on `down`.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml up -d postgres-test
+#   docker compose exec api pnpm test:e2e
+#   docker compose -f docker-compose.yml -f docker-compose.test.yml rm -sf postgres-test
+
+services:
+  postgres-test:
+    # Same major version as Supabase's managed Postgres.
+    image: postgres:17.11
+    environment:
+      # Throwaway credentials for a local-only container.
+      POSTGRES_USER: neuron
+      POSTGRES_PASSWORD: neuron
+      POSTGRES_DB: neuron_test
+    tmpfs:
+      - /var/lib/postgresql/data
+    volumes:
+      # Stub of Supabase's auth schema (auth.users) and roles.
+      - ./apps/api/test/db/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U neuron -d neuron_test']
+      interval: 2s
+      timeout: 3s
+      retries: 15

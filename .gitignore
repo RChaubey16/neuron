@@ -25,3 +25,6 @@ coverage/
 
 # Local credentials scratch file (never commit)
 cred.txt
+
+# Generated Prisma client
+apps/api/src/generated/

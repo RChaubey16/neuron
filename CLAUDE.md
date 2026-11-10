@@ -120,6 +120,15 @@ commands are in [README.md](README.md). Notes:
     `node_modules` volumes in sync with the lockfile.
 -   The dev image needs `procps`: Nest's watch mode uses `ps` to stop
     the old process on reload.
+-   Prisma 7 with the `prisma-client` generator and the `pg` driver
+    adapter (`@prisma/adapter-pg`). The client is generated into
+    `apps/api/src/generated/prisma` (git-ignored); import it from
+    `@/generated/prisma/client.js`. `prisma.config.ts` holds the CLI
+    connection (`DIRECT_URL`). Stay on Prisma 7.x until 8.0 is stable.
+-   Prisma's install scripts are approved in `pnpm-workspace.yaml`
+    (`allowBuilds`). New packages with build scripts need the same.
+-   The `prod` image does not include the Prisma CLI; migrations run
+    from the `migrate` target.
 -   Node 26 does not bundle Corepack; the Dockerfile installs a pinned
     version, which then provides the pnpm version in `package.json`.
 

@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  Matches,
   Max,
   Min,
   validateSync,
@@ -28,6 +29,15 @@ export class EnvironmentVariables {
   @Min(1)
   @Max(65535)
   PORT: number = 3000;
+
+  /**
+   * Runtime database connection (Supabase transaction pooler, port 6543).
+   * Prisma Migrate uses DIRECT_URL instead; see prisma.config.ts.
+   */
+  @Matches(/^postgres(ql)?:\/\/.+/, {
+    message: 'DATABASE_URL must be a postgresql:// connection string',
+  })
+  DATABASE_URL: string;
 
   /** Comma-separated list of origins allowed by CORS (the web app). */
   @IsOptional()

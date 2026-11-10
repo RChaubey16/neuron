@@ -1,0 +1,20 @@
+// Neuron database schema (Supabase PostgreSQL).
+//
+// - Change the schema here, then run `pnpm db:migrate` (prisma migrate dev).
+// - Production applies migrations with `prisma migrate deploy`.
+// - Prisma does not manage Supabase's `auth` schema. Foreign keys to
+//   `auth.users` are added with custom SQL inside migrations
+//   (`prisma migrate dev --create-only`, then edit the SQL).
+// - Enable RLS (with no policies) on every table in `public`, so the
+//   Supabase Data API cannot read them; only NestJS accesses the database.
+
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
