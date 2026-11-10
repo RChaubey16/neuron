@@ -112,7 +112,7 @@ is the real feature commit.
 
 ## Status
 
-Phase 0 in progress; see [plan/progress.md](plan/progress.md). Common
+Phase 0 complete; Phase 1 next. See [plan/progress.md](plan/progress.md). Common
 commands are in [README.md](README.md). Notes:
 
 -   Start the API with `docker compose up --build`; it runs
