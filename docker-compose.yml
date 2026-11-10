@@ -1,0 +1,40 @@
+# Local development. Everything runs in containers; the host needs only
+# Docker and Git. Supabase stays in the cloud (a separate dev project).
+#
+#   docker compose up --build          start the API in watch mode
+#   docker compose exec api pnpm test  run commands inside the container
+
+name: neuron
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+    ports:
+      - '3000:3000'
+    volumes:
+      # Whole repo, so `pnpm add` updates the shared lockfile on the host.
+      - ./:/repo
+      # node_modules and the pnpm store stay in Linux-only named volumes,
+      # so macOS-built packages never reach the container.
+      - root_node_modules:/repo/node_modules
+      - api_node_modules:/repo/apps/api/node_modules
+      - pnpm_store:/pnpm/store
+    working_dir: /repo/apps/api
+    # Syncs the volumes with the lockfile (a no-op when nothing changed),
+    # then starts Nest in watch mode.
+    command: sh -c "pnpm install --frozen-lockfile --filter @neuron/api... && pnpm start:dev"
+    init: true
+
+volumes:
+  root_node_modules:
+  api_node_modules:
+  pnpm_store:

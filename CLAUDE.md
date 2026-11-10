@@ -112,6 +112,16 @@ is the real feature commit.
 
 ## Status
 
-Pre-development. The plan is final, and development starts at Phase 0,
-Feature 0.1. Update this file when the actual commands, scripts, or
-structure differ from what is described here.
+Phase 0 in progress; see [plan/progress.md](plan/progress.md). Common
+commands are in [README.md](README.md). Notes:
+
+-   Start the API with `docker compose up --build`; it runs
+    `pnpm install --frozen-lockfile` on start to keep the
+    `node_modules` volumes in sync with the lockfile.
+-   The dev image needs `procps`: Nest's watch mode uses `ps` to stop
+    the old process on reload.
+-   Node 26 does not bundle Corepack; the Dockerfile installs a pinned
+    version, which then provides the pnpm version in `package.json`.
+
+Update this section when the actual commands, scripts, or structure
+differ from what is described here.
