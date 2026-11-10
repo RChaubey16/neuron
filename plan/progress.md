@@ -9,7 +9,7 @@ Updated after every feature commit.
 ## Current status
 
 -   **Current phase:** Phase 0: Project Foundation
--   **Next up:** Feature 0.2: Docker development environment
+-   **Next up:** Feature 0.3: Supabase database integration (Prisma)
 -   **Last updated:** 2026-11-10
 
 ## Waiting on
@@ -29,7 +29,7 @@ Updated after every feature commit.
 | Feature | Status | Commit | Notes |
 |---|---|---|---|
 | 0.1 Initialize NestJS project | Done | `957403f` | NestJS 12, Node 26, ESM; Oxlint + Vitest (plan updated); `@/*` alias; env validation, `/api/v1` prefix, CORS, validation pipe, exception filter |
-| 0.2 Docker development environment | Not started | | |
+| 0.2 Docker development environment | Done | `156d6ae` | Node 26.13 slim; `dev`/`prod` targets; Corepack 0.36 → pnpm 12.18; node_modules + store in volumes; hot reload works without polling (needs `procps`); prod image non-root, prod deps only |
 | 0.3 Supabase database integration (Prisma) | Not started | | |
 | 0.4 Health check API | Not started | | |
 
@@ -93,6 +93,7 @@ Newest first. One entry per commit.
 
 | Date | Commit | Summary |
 |---|---|---|
+| 2026-11-10 | `156d6ae` | Feature 0.2: Dockerfile (dev/prod), docker-compose.yml, .env.example, README with commands. |
 | 2026-11-10 | `957403f` | Feature 0.1: pnpm monorepo and NestJS API scaffold with config, validation, CORS and error handling. |
 | 2026-11-10 | `8043cba` | Initial commit: plan and CLAUDE.md. |
 | 2026-11-10 | (none) | Plan finalized; progress tracking started. |
