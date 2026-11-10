@@ -1,0 +1,13 @@
+{
+  "name": "neuron",
+  "private": true,
+  "description": "Neuron platform monorepo",
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=26.13.0"
+  },
+  "scripts": {
+    "api": "pnpm --filter @neuron/api",
+    "web": "pnpm --filter @neuron/web"
+  }
+}
