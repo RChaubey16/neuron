@@ -33,6 +33,14 @@ services:
     # then starts Nest in watch mode.
     command: sh -c "pnpm install --frozen-lockfile --filter @neuron/api... && pnpm start:dev"
     init: true
+    healthcheck:
+      # Liveness only, so a database outage does not mark the container
+      # unhealthy. `GET /api/v1/health` reports the database status.
+      test: ['CMD', 'node', '-e', "fetch('http://127.0.0.1:3000/api/v1/health/live').then((r) => process.exit(r.ok ? 0 : 1), () => process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      start_period: 60s
+      retries: 3
 
 volumes:
   root_node_modules:

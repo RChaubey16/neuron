@@ -1,8 +1,11 @@
 import { INestApplication } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import {
   API_KEY_HEADER,
   API_PREFIX,
+  DOCS_PATH,
+  OPENAPI_JSON_PATH,
 } from '@/common/constants/api.constants.js';
 import { AppConfig } from '@/config/configuration.js';
 
@@ -26,4 +29,26 @@ export function configureApp(app: INestApplication): void {
   });
 
   app.enableShutdownHooks();
+
+  setupSwagger(app);
+}
+
+/**
+ * Serves Swagger UI at /api/v1/docs and the OpenAPI document at
+ * /api/v1/openapi.json (the web app's API reference reads it).
+ * Full endpoint documentation comes in Phase 5.
+ */
+export function setupSwagger(app: INestApplication): void {
+  const document = SwaggerModule.createDocument(
+    app,
+    new DocumentBuilder()
+      .setTitle('Neuron API')
+      .setDescription('Reusable platform services through REST APIs.')
+      .setVersion('1.0')
+      .build(),
+  );
+
+  SwaggerModule.setup(DOCS_PATH, app, document, {
+    jsonDocumentUrl: OPENAPI_JSON_PATH,
+  });
 }

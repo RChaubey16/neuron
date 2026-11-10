@@ -23,7 +23,14 @@ cp .env.example .env        # then fill in real values
 docker compose up --build   # API in watch mode on http://localhost:3000
 ```
 
-The API is served under `http://localhost:3000/api/v1`.
+The API is served under `http://localhost:3000/api/v1`:
+
+| Endpoint | Purpose |
+|---|---|
+| `GET /api/v1/health` | App and database status (503 if the database is down) |
+| `GET /api/v1/health/live` | Liveness only, used by container health checks |
+| `/api/v1/docs` | Swagger UI |
+| `/api/v1/openapi.json` | OpenAPI document |
 
 ## Common commands
 
