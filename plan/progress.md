@@ -9,15 +9,14 @@ Updated after every feature commit.
 ## Current status
 
 -   **Current phase:** Phase 0: Project Foundation
--   **Next up:** Feature 0.1: Initialize NestJS project
--   **Last updated:** 2026-11-10 (plan finalized; development not
-    started)
+-   **Next up:** Feature 0.2: Docker development environment
+-   **Last updated:** 2026-11-10
 
 ## Waiting on
 
 | Item | Needed by | Status |
 |---|---|---|
-| Docker Desktop installed | Feature 0.1 | Pending |
+| Docker Desktop installed | Feature 0.1 | Done (Docker 29.8, Compose 5.5) |
 | Git repository URL | Before first push | Pending (not blocking) |
 | Supabase development project and connection strings | Feature 0.3 | Pending |
 | Google Cloud OAuth app | Feature 1.1 | Pending |
@@ -29,7 +28,7 @@ Updated after every feature commit.
 
 | Feature | Status | Commit | Notes |
 |---|---|---|---|
-| 0.1 Initialize NestJS project | Not started | | |
+| 0.1 Initialize NestJS project | Done | `957403f` | NestJS 12, Node 26, ESM; Oxlint + Vitest (plan updated); `@/*` alias; env validation, `/api/v1` prefix, CORS, validation pipe, exception filter |
 | 0.2 Docker development environment | Not started | | |
 | 0.3 Supabase database integration (Prisma) | Not started | | |
 | 0.4 Health check API | Not started | | |
@@ -94,4 +93,6 @@ Newest first. One entry per commit.
 
 | Date | Commit | Summary |
 |---|---|---|
+| 2026-11-10 | `957403f` | Feature 0.1: pnpm monorepo and NestJS API scaffold with config, validation, CORS and error handling. |
+| 2026-11-10 | `8043cba` | Initial commit: plan and CLAUDE.md. |
 | 2026-11-10 | (none) | Plan finalized; progress tracking started. |
