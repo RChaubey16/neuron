@@ -44,6 +44,9 @@ on the host.
 
     `.env` is git-ignored. Never commit it.
 
+    For Google login, also set up the Supabase Google provider:
+    see [docs/google-oauth-setup.md](docs/google-oauth-setup.md).
+
 3.  **Start the API**
 
     ``` bash
