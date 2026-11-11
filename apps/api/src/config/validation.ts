@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   Min,
@@ -39,6 +40,20 @@ export class EnvironmentVariables {
   })
   DATABASE_URL: string;
 
+  /**
+   * Supabase project URL, e.g. https://<project-ref>.supabase.co. Used to
+   * verify login tokens (issuer and public signing keys). Not a secret.
+   */
+  @IsUrl(
+    {
+      require_tld: false,
+      require_protocol: true,
+      protocols: ['http', 'https'],
+    },
+    { message: 'SUPABASE_URL must be an http(s) URL' },
+  )
+  SUPABASE_URL: string;
+
   /** Comma-separated list of origins allowed by CORS (the web app). */
   @IsOptional()
   @IsString()
@@ -46,9 +61,14 @@ export class EnvironmentVariables {
 }
 
 /**
+ * Validates and converts the environment variables at startup.
+ *
  * Used as `ConfigModule.forRoot({ validate })`. Error messages name the
- * failing variables and rules but never include their values, which may be
- * secrets.
+ * failing variables and rules but never include their values, which may
+ * be secrets.
+ *
+ * @param config - Raw environment variables.
+ * @returns The validated variables, with defaults applied.
  */
 export function validate(
   config: Record<string, unknown>,

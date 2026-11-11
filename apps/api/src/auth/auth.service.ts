@@ -1,0 +1,172 @@
+import {
+  HttpException,
+  Inject,
+  Injectable,
+  Logger,
+  ServiceUnavailableException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import {
+  errors,
+  jwtVerify,
+  type JWTPayload,
+  type JWTVerifyGetKey,
+  type JWTVerifyOptions,
+} from 'jose';
+import type { AuthUser } from '@/common/interfaces/auth-user.interface.js';
+import type { AppConfig } from '@/config/configuration.js';
+import {
+  ACCEPTED_JWT_ALGORITHMS,
+  AuthErrorMessage,
+  JWT_CLOCK_TOLERANCE_SECONDS,
+  SUPABASE_JWKS,
+} from './auth.constants.js';
+
+/** Claims Supabase adds to its access tokens (only the ones we read). */
+interface SupabaseClaims extends JWTPayload {
+  role?: unknown;
+  is_anonymous?: unknown;
+  email?: unknown;
+  user_metadata?: unknown;
+}
+
+/**
+ * jose error codes that mean "this token is bad" (401). Anything else,
+ * such as a JWKS fetch failure or timeout, is our problem (503).
+ */
+const INVALID_TOKEN_ERROR_CODES = new Set<string>([
+  errors.JWTClaimValidationFailed.code,
+  errors.JWTInvalid.code,
+  errors.JWSInvalid.code,
+  errors.JWSSignatureVerificationFailed.code,
+  errors.JOSEAlgNotAllowed.code,
+  errors.JOSENotSupported.code,
+  errors.JWKSNoMatchingKey.code,
+  errors.JWKSMultipleMatchingKeys.code,
+]);
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+@Injectable()
+export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+  private readonly verifyOptions: JWTVerifyOptions;
+
+  constructor(
+    @Inject(SUPABASE_JWKS) private readonly jwks: JWTVerifyGetKey,
+    config: ConfigService<AppConfig, true>,
+  ) {
+    const { issuer, audience } = config.get('auth', { infer: true });
+    this.verifyOptions = {
+      issuer,
+      audience,
+      algorithms: ACCEPTED_JWT_ALGORITHMS,
+      clockTolerance: JWT_CLOCK_TOLERANCE_SECONDS,
+      requiredClaims: ['sub', 'exp', 'iat'],
+    };
+  }
+
+  /**
+   * Verifies a Supabase access token and returns its user.
+   *
+   * Checks the signature, algorithm, issuer, audience, expiry, and
+   * Neuron's own claim rules.
+   *
+   * @param token - Raw access token from the `Authorization` header.
+   * @returns The authenticated user.
+   * @throws UnauthorizedException when the token is invalid or expired.
+   * @throws ServiceUnavailableException when the signing keys cannot be
+   *   loaded from Supabase.
+   */
+  async verifyAccessToken(token: string): Promise<AuthUser> {
+    let claims: SupabaseClaims;
+    try {
+      ({ payload: claims } = await jwtVerify<SupabaseClaims>(
+        token,
+        this.jwks,
+        this.verifyOptions,
+      ));
+    } catch (error) {
+      throw this.toHttpError(error);
+    }
+    return toAuthUser(claims);
+  }
+
+  /**
+   * Maps a verification error to the HTTP error returned to the client.
+   *
+   * @param error - Error thrown while verifying the token.
+   * @returns 401 for a bad or expired token, 503 for anything else.
+   */
+  private toHttpError(error: unknown): HttpException {
+    if (error instanceof errors.JWTExpired) {
+      return new UnauthorizedException(AuthErrorMessage.Expired);
+    }
+    if (
+      error instanceof errors.JOSEError &&
+      INVALID_TOKEN_ERROR_CODES.has(error.code)
+    ) {
+      return new UnauthorizedException(AuthErrorMessage.Invalid);
+    }
+    // Never log the token itself.
+    this.logger.error(
+      `Could not verify access token: ${
+        error instanceof Error ? error.message : 'unknown error'
+      }`,
+    );
+    return new ServiceUnavailableException(AuthErrorMessage.Unavailable);
+  }
+}
+
+/**
+ * Builds the user from verified token claims.
+ *
+ * Applies Neuron's rules on top of the standard checks: a UUID user ID,
+ * the `authenticated` role, and no anonymous users (Google only).
+ *
+ * @param claims - Claims of a token whose signature is already verified.
+ * @returns The authenticated user.
+ * @throws UnauthorizedException when the claims break those rules.
+ */
+function toAuthUser(claims: SupabaseClaims): AuthUser {
+  const { sub, role, is_anonymous: isAnonymous } = claims;
+  if (
+    typeof sub !== 'string' ||
+    !UUID_PATTERN.test(sub) ||
+    role !== 'authenticated' ||
+    isAnonymous === true
+  ) {
+    throw new UnauthorizedException(AuthErrorMessage.Invalid);
+  }
+
+  const metadata = isRecord(claims.user_metadata) ? claims.user_metadata : {};
+  return {
+    id: sub.toLowerCase(),
+    email: stringOrNull(claims.email),
+    fullName: stringOrNull(metadata.full_name) ?? stringOrNull(metadata.name),
+    avatarUrl:
+      stringOrNull(metadata.avatar_url) ?? stringOrNull(metadata.picture),
+  };
+}
+
+/**
+ * Checks whether a value is a plain object.
+ *
+ * @param value - Value to check.
+ * @returns True for a non-null, non-array object.
+ */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Narrows an untrusted claim value to a non-empty string.
+ *
+ * @param value - Claim value.
+ * @returns The string, or null when it is missing, empty, or not a string.
+ */
+function stringOrNull(value: unknown): string | null {
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}

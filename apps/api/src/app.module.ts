@@ -1,6 +1,7 @@
 import { Module, ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { APP_FILTER, APP_PIPE } from '@nestjs/core';
+import { AuthModule } from '@/auth/auth.module.js';
 import { AllExceptionsFilter } from '@/common/filters/all-exceptions.filter.js';
 import configuration from '@/config/configuration.js';
 import { validate } from '@/config/validation.js';
@@ -19,6 +20,7 @@ import { PrismaModule } from '@/prisma/prisma.module.js';
       validate,
     }),
     PrismaModule,
+    AuthModule,
     HealthModule,
   ],
   providers: [

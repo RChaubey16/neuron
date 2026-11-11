@@ -28,6 +28,9 @@ export class PrismaService
     });
   }
 
+  /**
+   * Checks the database connection at startup and logs the result.
+   */
   async onModuleInit(): Promise<void> {
     // Fail loudly in the logs, but keep the app running so the health
     // check can report the database as down instead of crash-looping.
@@ -38,11 +41,18 @@ export class PrismaService
     }
   }
 
+  /**
+   * Closes the database connection on shutdown.
+   */
   async onModuleDestroy(): Promise<void> {
     await this.$disconnect();
   }
 
-  /** Returns true when the database answers a trivial query. */
+  /**
+   * Runs a trivial query to check that the database is reachable.
+   *
+   * @returns True when the database answers, false otherwise.
+   */
   async ping(): Promise<boolean> {
     try {
       await this.$queryRaw`SELECT 1`;
