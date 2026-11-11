@@ -9,8 +9,8 @@ Updated after every feature commit.
 ## Current status
 
 -   **Current phase:** Phase 1: Authentication System (Phase 0 complete)
--   **Next up:** Feature 1.1: Configure Supabase Google OAuth
--   **Last updated:** 2026-11-10
+-   **Next up:** Feature 1.2: Authentication integration in NestJS
+-   **Last updated:** 2026-11-11
 
 ## Waiting on
 
@@ -19,7 +19,7 @@ Updated after every feature commit.
 | Docker Desktop installed | Feature 0.1 | Done (Docker 29.8, Compose 5.5) |
 | Git repository URL | Before first push | Pending (not blocking) |
 | Supabase development project and connection strings | Feature 0.3 | Done (in local `.env`) |
-| Google Cloud OAuth app | Feature 1.1 | Pending |
+| Google Cloud OAuth app | Feature 1.1 | Done (dev; app in Testing mode) |
 | Domain names (web, API, short) | Feature 4.5 / 5.6 | Pending (not blocking) |
 
 ## Features
@@ -37,7 +37,7 @@ Updated after every feature commit.
 
 | Feature | Status | Commit | Notes |
 |---|---|---|---|
-| 1.1 Configure Supabase Google OAuth | Not started | | |
+| 1.1 Configure Supabase Google OAuth | Done | `8a00600` | Google client (Testing mode) + Supabase Google provider on the dev project; Site URL and redirect allowlist `http://localhost:3001/auth/callback`; login verified via the authorize URL. Tokens are ES256 (asymmetric, JWKS), `aud` `authenticated`. Setup in `docs/google-oauth-setup.md`. Production callback added in 4.5 |
 | 1.2 Authentication integration in NestJS | Not started | | |
 | 1.3 User management | Not started | | |
 | 1.4 Protected routes | Not started | | |
@@ -93,6 +93,7 @@ Newest first. One entry per commit.
 
 | Date | Commit | Summary |
 |---|---|---|
+| 2026-11-11 | `8a00600` | Feature 1.1: Google OAuth configured in Google Cloud and Supabase (dev); setup documented. |
 | 2026-11-10 | (none) | Feature 0.3 verified against the Supabase dev project; Phase 0 complete. |
 | 2026-11-10 | `aa74194` | Feature 0.4: health and liveness endpoints, Docker health checks, basic Swagger. |
 | 2026-11-10 | `aa0fd72` | Feature 0.3 (code): Prisma integration, migration workflow, test database. Supabase check pending. |
