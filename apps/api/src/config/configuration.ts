@@ -19,6 +19,12 @@ export interface AppConfig {
   };
 }
 
+/**
+ * Splits a comma-separated value into trimmed, non-empty items.
+ *
+ * @param value - Comma-separated list, possibly undefined.
+ * @returns The items, or an empty array.
+ */
 export function parseList(value: string | undefined): string[] {
   return (value ?? '')
     .split(',')
@@ -26,7 +32,12 @@ export function parseList(value: string | undefined): string[] {
     .filter((item) => item.length > 0);
 }
 
-/** Supabase Auth endpoints derived from the project URL. */
+/**
+ * Derives the Supabase Auth issuer and JWKS URL from the project URL.
+ *
+ * @param supabaseUrl - Project URL, e.g. `https://<ref>.supabase.co`.
+ * @returns The token issuer and the public signing keys URL.
+ */
 export function supabaseAuthUrls(supabaseUrl: string): {
   issuer: string;
   jwksUrl: string;

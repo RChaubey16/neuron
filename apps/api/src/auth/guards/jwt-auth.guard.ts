@@ -12,7 +12,12 @@ import { AuthService } from '../auth.service.js';
 
 const BEARER_PATTERN = /^Bearer[ \t]+([^\s]+)[ \t]*$/i;
 
-/** Returns the token from `Authorization: Bearer <token>`, if present. */
+/**
+ * Extracts the token from an `Authorization: Bearer <token>` header.
+ *
+ * @param header - Value of the `Authorization` header.
+ * @returns The token, or undefined when the header is not a bearer token.
+ */
 export function extractBearerToken(
   header: string | undefined,
 ): string | undefined {
@@ -31,6 +36,14 @@ export class JwtAuthGuard implements CanActivate {
     private readonly auth: AuthService,
   ) {}
 
+  /**
+   * Authenticates the request unless the route is public.
+   *
+   * @param context - Current request context.
+   * @returns True when the request may proceed.
+   * @throws UnauthorizedException when the token is missing, invalid, or
+   *   expired.
+   */
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const isPublic = this.reflector.getAllAndOverride<boolean | undefined>(
       IS_PUBLIC_KEY,

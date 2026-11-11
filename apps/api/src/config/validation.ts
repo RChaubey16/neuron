@@ -61,9 +61,14 @@ export class EnvironmentVariables {
 }
 
 /**
+ * Validates and converts the environment variables at startup.
+ *
  * Used as `ConfigModule.forRoot({ validate })`. Error messages name the
- * failing variables and rules but never include their values, which may be
- * secrets.
+ * failing variables and rules but never include their values, which may
+ * be secrets.
+ *
+ * @param config - Raw environment variables.
+ * @returns The validated variables, with defaults applied.
  */
 export function validate(
   config: Record<string, unknown>,

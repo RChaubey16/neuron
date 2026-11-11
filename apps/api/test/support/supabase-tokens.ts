@@ -33,7 +33,11 @@ export interface TestTokenSigner {
   ): Promise<string>;
 }
 
-/** Creates an ES256 key pair and a signer for Supabase-like tokens. */
+/**
+ * Creates an ES256 key pair and a signer for Supabase-like tokens.
+ *
+ * @returns The signer and the key set that verifies its tokens.
+ */
 export async function createTestTokenSigner(): Promise<TestTokenSigner> {
   const { privateKey, publicKey } = await generateKeyPair('ES256');
   const publicJwk = {

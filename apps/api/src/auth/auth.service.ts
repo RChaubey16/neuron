@@ -69,9 +69,13 @@ export class AuthService {
   }
 
   /**
-   * Verifies a Supabase access token (signature, algorithm, issuer,
-   * audience, expiry, and Neuron's own claim rules) and returns the user.
+   * Verifies a Supabase access token and returns its user.
    *
+   * Checks the signature, algorithm, issuer, audience, expiry, and
+   * Neuron's own claim rules.
+   *
+   * @param token - Raw access token from the `Authorization` header.
+   * @returns The authenticated user.
    * @throws UnauthorizedException when the token is invalid or expired.
    * @throws ServiceUnavailableException when the signing keys cannot be
    *   loaded from Supabase.
@@ -90,6 +94,12 @@ export class AuthService {
     return toAuthUser(claims);
   }
 
+  /**
+   * Maps a verification error to the HTTP error returned to the client.
+   *
+   * @param error - Error thrown while verifying the token.
+   * @returns 401 for a bad or expired token, 503 for anything else.
+   */
   private toHttpError(error: unknown): HttpException {
     if (error instanceof errors.JWTExpired) {
       return new UnauthorizedException(AuthErrorMessage.Expired);
@@ -111,8 +121,14 @@ export class AuthService {
 }
 
 /**
+ * Builds the user from verified token claims.
+ *
  * Applies Neuron's rules on top of the standard checks: a UUID user ID,
  * the `authenticated` role, and no anonymous users (Google only).
+ *
+ * @param claims - Claims of a token whose signature is already verified.
+ * @returns The authenticated user.
+ * @throws UnauthorizedException when the claims break those rules.
  */
 function toAuthUser(claims: SupabaseClaims): AuthUser {
   const { sub, role, is_anonymous: isAnonymous } = claims;
@@ -135,10 +151,22 @@ function toAuthUser(claims: SupabaseClaims): AuthUser {
   };
 }
 
+/**
+ * Checks whether a value is a plain object.
+ *
+ * @param value - Value to check.
+ * @returns True for a non-null, non-array object.
+ */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Narrows an untrusted claim value to a non-empty string.
+ *
+ * @param value - Claim value.
+ * @returns The string, or null when it is missing, empty, or not a string.
+ */
 function stringOrNull(value: unknown): string | null {
   return typeof value === 'string' && value.length > 0 ? value : null;
 }

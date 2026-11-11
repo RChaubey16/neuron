@@ -55,6 +55,25 @@ is the real feature commit.
 -   `node_modules` lives in Docker volumes. Do not bind-mount it from
     the host.
 
+### Code comments
+
+Give every service method and helper function a JSDoc comment in this
+form: a one-line summary, a blank line, then `@param` for each
+parameter and `@returns` (omit `@returns` for `void`). Add `@throws`
+when the method throws an HTTP exception the caller should know about.
+
+``` ts
+/**
+ * Retrieves a user by ID.
+ *
+ * @param id - User ID.
+ * @returns The user object.
+ */
+async findOne(id: string): Promise<User> {
+  // Implementation
+}
+```
+
 ### Secrets and security
 
 -   Never commit `.env`. Keep `.env.example` up to date, with
