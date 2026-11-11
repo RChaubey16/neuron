@@ -9,7 +9,7 @@ Updated after every feature commit.
 ## Current status
 
 -   **Current phase:** Phase 1: Authentication System (Phase 0 complete)
--   **Next up:** Feature 1.3: User management
+-   **Next up:** Feature 1.4: Protected routes
 -   **Last updated:** 2026-11-11
 
 ## Waiting on
@@ -39,7 +39,7 @@ Updated after every feature commit.
 |---|---|---|---|
 | 1.1 Configure Supabase Google OAuth | Done | `8a00600` | Google client (Testing mode) + Supabase Google provider on the dev project; Site URL and redirect allowlist `http://localhost:3001/auth/callback`; login verified via the authorize URL. Tokens are ES256 (asymmetric, JWKS), `aud` `authenticated`. Setup in `docs/google-oauth-setup.md`. Production callback added in 4.5 |
 | 1.2 Authentication integration in NestJS | Done | `20e0177` | `jose` verifies tokens against the Supabase JWKS (ES256/RS256 only; no JWT secret, no Passport): issuer, audience `authenticated`, expiry (5 s tolerance), UUID `sub`, role `authenticated`, no anonymous users. `JwtAuthGuard` respects `@Public()` but is not global yet (1.4). `@CurrentUser()` / `@CurrentUser('id')`. 401 for missing/invalid/expired, 503 if the JWKS cannot be loaded. New required env `SUPABASE_URL`. Checked against the real dev JWKS |
-| 1.3 User management | Not started | | |
+| 1.3 User management | Done | `209669f` | `profiles` (id = Supabase user ID, email, full_name, avatar_url, timestamps), RLS on. **Plan change (approved):** no FK to `auth.users`: a custom-SQL FK breaks `migrate dev` (cross-schema introspection), and Prisma external tables need `auth` in `schemas`, which makes Prisma generate DROPs for all Supabase auth tables. Instead Prisma sees only `public`, and an `AFTER DELETE` trigger on `auth.users` deletes the profile; inserts check the user exists. `GET /users/me` creates the profile on first call and syncs email only; `PATCH /users/me` edits name/avatar (https, `null` clears). Applied to Supabase dev; `migrate diff` against it is empty |
 | 1.4 Protected routes | Not started | | |
 
 ### Phase 2: API Key Management
@@ -93,6 +93,7 @@ Newest first. One entry per commit.
 
 | Date | Commit | Summary |
 |---|---|---|
+| 2026-11-11 | `209669f` | Feature 1.3: profiles table + delete trigger on auth.users, `GET`/`PATCH /users/me`. Plan updated: no FKs to `auth.users`. |
 | 2026-11-11 | `20e0177` | Feature 1.2: Supabase JWT verification (JWKS), auth guard, `@CurrentUser()`, `SUPABASE_URL` config. |
 | 2026-11-11 | `8a00600` | Feature 1.1: Google OAuth configured in Google Cloud and Supabase (dev); setup documented. |
 | 2026-11-10 | (none) | Feature 0.3 verified against the Supabase dev project; Phase 0 complete. |

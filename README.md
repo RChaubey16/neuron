@@ -83,6 +83,8 @@ The API is served under `http://localhost:3000/api/v1`:
 |---|---|
 | `GET /api/v1/health` | App and database status (503 if the database is down) |
 | `GET /api/v1/health/live` | Liveness only, used by container health checks |
+| `GET /api/v1/users/me` | Signed-in user's profile, created on first call (Bearer token) |
+| `PATCH /api/v1/users/me` | Update name and avatar (Bearer token) |
 | `/api/v1/docs` | Swagger UI |
 | `/api/v1/openapi.json` | OpenAPI document |
 
@@ -116,10 +118,20 @@ docker compose exec api pnpm db:generate    # regenerate the Prisma client
 ```
 
 Change `apps/api/prisma/schema.prisma`, then run `pnpm db:migrate`.
-Foreign keys to Supabase's `auth.users` are not managed by Prisma: create
-the migration with `pnpm db:migrate --create-only`, add the SQL, then
-apply it. The generated client in `apps/api/src/generated/` is
+Prisma only sees the `public` schema; never add `auth` to `schemas`
+(Prisma would try to drop Supabase's tables). There are no foreign keys
+to `auth.users`. For SQL Prisma cannot express (triggers on
+`auth.users`, RLS), create the migration with
+`pnpm db:migrate --create-only`, add the SQL, then apply it. The
+generated client in `apps/api/src/generated/` is
 git-ignored and rebuilt on start.
+
+The container runs as root, so new migration folders are owned by root
+on the host. Give them back to your user before editing:
+
+``` bash
+docker compose exec api chown -R "$(id -u):$(id -g)" prisma/migrations
+```
 
 Production applies migrations with the `migrate` image target
 (`prisma migrate deploy`) before the new release starts.

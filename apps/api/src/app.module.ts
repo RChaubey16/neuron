@@ -7,6 +7,7 @@ import configuration from '@/config/configuration.js';
 import { validate } from '@/config/validation.js';
 import { HealthModule } from '@/health/health.module.js';
 import { PrismaModule } from '@/prisma/prisma.module.js';
+import { UsersModule } from '@/users/users.module.js';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { PrismaModule } from '@/prisma/prisma.module.js';
     PrismaModule,
     AuthModule,
     HealthModule,
+    UsersModule,
   ],
   providers: [
     {
