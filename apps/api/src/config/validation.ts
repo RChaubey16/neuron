@@ -5,6 +5,7 @@ import {
   IsInt,
   IsOptional,
   IsString,
+  IsUrl,
   Matches,
   Max,
   Min,
@@ -38,6 +39,20 @@ export class EnvironmentVariables {
     message: 'DATABASE_URL must be a postgresql:// connection string',
   })
   DATABASE_URL: string;
+
+  /**
+   * Supabase project URL, e.g. https://<project-ref>.supabase.co. Used to
+   * verify login tokens (issuer and public signing keys). Not a secret.
+   */
+  @IsUrl(
+    {
+      require_tld: false,
+      require_protocol: true,
+      protocols: ['http', 'https'],
+    },
+    { message: 'SUPABASE_URL must be an http(s) URL' },
+  )
+  SUPABASE_URL: string;
 
   /** Comma-separated list of origins allowed by CORS (the web app). */
   @IsOptional()

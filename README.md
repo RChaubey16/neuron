@@ -42,6 +42,10 @@ on the host.
     -   `DATABASE_URL`: Transaction pooler (port 6543)
     -   `DIRECT_URL`: Session pooler (port 5432)
 
+    Also set `SUPABASE_URL` to the project URL
+    (`https://<project-ref>.supabase.co`). The API uses it to verify
+    login tokens.
+
     `.env` is git-ignored. Never commit it.
 
     For Google login, also set up the Supabase Google provider:

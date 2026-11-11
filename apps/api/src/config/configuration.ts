@@ -9,6 +9,14 @@ export interface AppConfig {
   cors: {
     origins: string[];
   };
+  auth: {
+    /** Expected `iss` claim of Supabase access tokens. */
+    issuer: string;
+    /** Supabase's public signing keys (JWKS) for those tokens. */
+    jwksUrl: string;
+    /** Expected `aud` claim: signed-in (non-anonymous-role) users. */
+    audience: string;
+  };
 }
 
 export function parseList(value: string | undefined): string[] {
@@ -16,6 +24,15 @@ export function parseList(value: string | undefined): string[] {
     .split(',')
     .map((item) => item.trim())
     .filter((item) => item.length > 0);
+}
+
+/** Supabase Auth endpoints derived from the project URL. */
+export function supabaseAuthUrls(supabaseUrl: string): {
+  issuer: string;
+  jwksUrl: string;
+} {
+  const issuer = `${supabaseUrl.replace(/\/+$/, '')}/auth/v1`;
+  return { issuer, jwksUrl: `${issuer}/.well-known/jwks.json` };
 }
 
 /**
@@ -30,5 +47,9 @@ export default (): AppConfig => ({
   },
   cors: {
     origins: parseList(process.env.CORS_ORIGINS),
+  },
+  auth: {
+    ...supabaseAuthUrls(process.env.SUPABASE_URL ?? ''),
+    audience: 'authenticated',
   },
 });

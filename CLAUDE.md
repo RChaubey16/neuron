@@ -129,6 +129,11 @@ commands are in [README.md](README.md). Notes:
     (`allowBuilds`). New packages with build scripts need the same.
 -   The `prod` image does not include the Prisma CLI; migrations run
     from the `migrate` target.
+-   Supabase JWTs are verified with `jose` against the project's JWKS
+    (ES256/RS256 only, no JWT secret), not Passport. `AuthService`,
+    `JwtAuthGuard`, and `@CurrentUser()` live in `src/auth` and
+    `src/common`. Tests swap the `SUPABASE_JWKS` provider for a local key
+    set (`test/support/supabase-tokens.ts`).
 -   Node 26 does not bundle Corepack; the Dockerfile installs a pinned
     version, which then provides the pnpm version in `package.json`.
 

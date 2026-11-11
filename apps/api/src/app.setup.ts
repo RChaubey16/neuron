@@ -45,6 +45,12 @@ export function setupSwagger(app: INestApplication): void {
       .setTitle('Neuron API')
       .setDescription('Reusable platform services through REST APIs.')
       .setVersion('1.0')
+      .addBearerAuth({
+        type: 'http',
+        scheme: 'bearer',
+        bearerFormat: 'JWT',
+        description: 'Supabase access token from signing in to the web app.',
+      })
       .build(),
   );
 
