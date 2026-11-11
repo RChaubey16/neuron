@@ -13,15 +13,62 @@ status.
 
 ## Requirements
 
-Only **Docker** (with Compose) and **Git**. Node, pnpm, and all packages
-run inside containers. Do not install them on the host.
+-   [Docker](https://docs.docker.com/get-docker/) with Docker Compose v2
+-   Git
+-   A free [Supabase](https://supabase.com) project for development
 
-## Getting started
+Node, pnpm, and all packages run inside containers. Do not install them
+on the host.
 
-``` bash
-cp .env.example .env        # then fill in real values
-docker compose up --build   # API in watch mode on http://localhost:3000
-```
+## Local setup
+
+1.  **Clone the repository**
+
+    ``` bash
+    git clone https://github.com/RChaubey16/neuron.git
+    cd neuron
+    git checkout develop
+    ```
+
+2.  **Create your `.env`**
+
+    ``` bash
+    cp .env.example .env
+    ```
+
+    In your Supabase project, open **Connect** and copy the connection
+    strings into `.env`:
+
+    -   `DATABASE_URL`: Transaction pooler (port 6543)
+    -   `DIRECT_URL`: Session pooler (port 5432)
+
+    `.env` is git-ignored. Never commit it.
+
+3.  **Start the API**
+
+    ``` bash
+    docker compose up --build
+    ```
+
+    The first start builds the image and installs dependencies into
+    Docker volumes, so it takes a few minutes. The API then runs in watch
+    mode on <http://localhost:3000>.
+
+4.  **Apply database migrations** (in a second terminal)
+
+    ``` bash
+    docker compose exec api pnpm db:deploy
+    ```
+
+5.  **Check that it works**
+
+    ``` bash
+    curl http://localhost:3000/api/v1/health
+    ```
+
+    A `200` response with the database reported as up means the setup
+    is complete. Open <http://localhost:3000/api/v1/docs> for the
+    Swagger UI.
 
 The API is served under `http://localhost:3000/api/v1`:
 
