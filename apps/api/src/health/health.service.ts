@@ -12,6 +12,12 @@ export const DATABASE_CHECK_TIMEOUT_MS = 3000;
 export class HealthService {
   constructor(private readonly prisma: PrismaService) {}
 
+  /**
+   * Checks the app and its database.
+   *
+   * @returns Overall status (`error` if any dependency is down) with
+   *   per-check details.
+   */
   async check(): Promise<HealthResponseDto> {
     const database = await this.checkDatabase();
     const app: HealthCheckDto = { status: 'up' };
@@ -24,6 +30,11 @@ export class HealthService {
     };
   }
 
+  /**
+   * Pings the database, giving up after `DATABASE_CHECK_TIMEOUT_MS`.
+   *
+   * @returns `up` with the latency, or `down` on failure or timeout.
+   */
   private async checkDatabase(): Promise<HealthCheckDto> {
     const started = performance.now();
     let timer: NodeJS.Timeout | undefined;

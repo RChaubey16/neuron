@@ -27,6 +27,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
 
   constructor(private readonly httpAdapterHost: HttpAdapterHost) {}
 
+  /**
+   * Sends the error response, logging 5xx errors on the server.
+   *
+   * @param exception - The thrown error.
+   * @param host - Current request context.
+   */
   catch(exception: unknown, host: ArgumentsHost): void {
     const { httpAdapter } = this.httpAdapterHost;
     const ctx = host.switchToHttp();
@@ -47,6 +53,13 @@ export class AllExceptionsFilter implements ExceptionFilter {
     httpAdapter.reply(ctx.getResponse(), body, body.statusCode);
   }
 
+  /**
+   * Builds the JSON error body for an exception.
+   *
+   * @param exception - The thrown error.
+   * @param path - Request URL.
+   * @returns The error body; a generic 500 for non-HTTP errors.
+   */
   buildBody(exception: unknown, path: string): ErrorResponseBody {
     const timestamp = new Date().toISOString();
 
@@ -88,7 +101,12 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 }
 
-/** NOT_FOUND -> Not Found */
+/**
+ * Converts an `HttpStatus` key to title case (`NOT_FOUND` → `Not Found`).
+ *
+ * @param name - `HttpStatus` enum key.
+ * @returns The title-cased name.
+ */
 function toTitle(name: string): string {
   return name
     .toLowerCase()
