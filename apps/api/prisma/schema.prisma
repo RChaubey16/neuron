@@ -2,9 +2,14 @@
 //
 // - Change the schema here, then run `pnpm db:migrate` (prisma migrate dev).
 // - Production applies migrations with `prisma migrate deploy`.
-// - Prisma does not manage Supabase's `auth` schema. Foreign keys to
-//   `auth.users` are added with custom SQL inside migrations
-//   (`prisma migrate dev --create-only`, then edit the SQL).
+// - Prisma sees only the `public` schema. Never add `auth` (or any other
+//   Supabase schema) to `schemas`: Prisma would then treat Supabase's
+//   tables as its own and generate DROP statements for them.
+// - No foreign keys to `auth.users` (Prisma cannot introspect cross-schema
+//   foreign keys). Link to users by ID and keep data in step with triggers
+//   on auth.users, written as custom SQL in migrations
+//   (`prisma migrate dev --create-only`, then edit the SQL). Other tables
+//   reference `profiles` with normal Prisma relations.
 // - Enable RLS (with no policies) on every table in `public`, so the
 //   Supabase Data API cannot read them; only NestJS accesses the database.
 
@@ -17,4 +22,20 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+}
+
+/// Application profile for a Supabase user (1:1 with auth.users).
+/// `id` is the Supabase user ID. There is no foreign key to auth.users:
+/// Prisma only sees the `public` schema, so it can never alter Supabase's
+/// `auth` schema. A trigger on auth.users deletes the profile with the
+/// user (see the create_profiles migration).
+model Profile {
+  id        String   @id @db.Uuid
+  email     String?
+  fullName  String?  @map("full_name")
+  avatarUrl String?  @map("avatar_url")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("profiles")
 }

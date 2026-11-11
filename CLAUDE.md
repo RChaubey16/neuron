@@ -97,8 +97,13 @@ async findOne(id: string): Promise<User> {
     linting, Vitest + Supertest for tests (`vi.fn()`, not `jest.fn()`).
     Path alias `@/*` maps to `apps/api/src/*`.
 -   **Database:** Supabase PostgreSQL, accessed only from NestJS through
-    Prisma. Schema changes go through Prisma Migrate. Foreign keys to
-    `auth.users` use custom SQL in migrations. RLS is enabled with no
+    Prisma. Schema changes go through Prisma Migrate. Prisma sees only
+    the `public` schema: never add `auth` to `schemas` (Prisma would
+    generate DROPs for Supabase's tables). No foreign keys to
+    `auth.users` (Prisma can't introspect cross-schema FKs); tables link
+    to users by ID, `profiles` is cleaned up by an `AFTER DELETE` trigger
+    on `auth.users` (custom SQL in the migration), and other tables
+    reference `profiles` with normal relations. RLS is enabled with no
     policies on `public` tables.
 -   **Auth:** the web app logs in with Google through Supabase JS and
     sends `Authorization: Bearer <JWT>`. External apps send `x-api-key`.
@@ -153,6 +158,10 @@ commands are in [README.md](README.md). Notes:
     `JwtAuthGuard`, and `@CurrentUser()` live in `src/auth` and
     `src/common`. Tests swap the `SUPABASE_JWKS` provider for a local key
     set (`test/support/supabase-tokens.ts`).
+-   Files the container creates on the bind mount (for example new
+    migration folders from `prisma migrate dev`) are owned by root. Run
+    `docker compose exec api chown -R "$(id -u):$(id -g)" prisma/migrations`
+    before editing them from the host.
 -   Node 26 does not bundle Corepack; the Dockerfile installs a pinned
     version, which then provides the pnpm version in `package.json`.
 

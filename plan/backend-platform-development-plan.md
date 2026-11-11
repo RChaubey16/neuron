@@ -348,9 +348,12 @@ Tasks:
     on startup and disconnect on shutdown.
 -   [ ] Establish the migration workflow: `prisma migrate dev` locally,
     `prisma migrate deploy` in production.
--   [ ] Plan for foreign keys to `auth.users`: Prisma does not manage
-    the `auth` schema, so add those constraints with custom SQL inside
-    Prisma migrations.
+-   [ ] Plan for links to `auth.users`: Prisma does not manage the
+    `auth` schema and cannot introspect foreign keys into it, so tables
+    link to users by ID, with no foreign key. Triggers on `auth.users`
+    (custom SQL inside Prisma migrations) keep `profiles` in step; other
+    tables reference `profiles`. (Changed in Feature 1.3; see the
+    progress log.)
 -   [ ] Test database connectivity.
 -   [ ] Use a separate Supabase project for development; the local
     containers connect to it. Production uses its own project.
@@ -1270,7 +1273,10 @@ For the first release:
   `short_urls`   URL shortener records
 
 Supabase Auth manages authentication identities separately through its
-own `auth.users` table.
+own `auth.users` table. `profiles.id` is the Supabase user ID, without a
+foreign key (Prisma cannot introspect one across schemas); an
+`AFTER DELETE` trigger on `auth.users` deletes the profile. `api_keys`
+and `short_urls` reference `profiles` with normal foreign keys.
 
 ### Relationships
 
