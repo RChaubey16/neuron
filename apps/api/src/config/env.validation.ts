@@ -12,8 +12,10 @@ import {
   Max,
   Min,
   MinLength,
+  ValidateBy,
   validateSync,
 } from 'class-validator';
+import { parseMailbox } from '../emails/mailbox.js';
 
 export enum NodeEnv {
   Development = 'development',
@@ -48,6 +50,24 @@ export class EnvironmentVariables {
 
   @Matches(/^postgres(ql)?:\/\/\S+$/, { message: 'DATABASE_URL must be a postgresql:// URL' })
   DATABASE_URL: string;
+
+  /** Redis for the BullMQ queues. Use rediss:// for TLS. A /N path picks the database number. */
+  @Matches(/^rediss?:\/\/\S+$/, { message: 'REDIS_URL must be a redis:// or rediss:// URL' })
+  REDIS_URL: string;
+
+  /**
+   * Sender for every email, e.g. `Neuron <noreply@neuron.example.com>`. In
+   * production the domain must be verified in Resend.
+   */
+  @ValidateBy({
+    name: 'isMailbox',
+    validator: {
+      validate: (value: unknown) => typeof value === 'string' && parseMailbox(value) !== null,
+      defaultMessage: () =>
+        'EMAIL_FROM must be an email, or a name and email like "Neuron <noreply@example.com>"',
+    },
+  })
+  EMAIL_FROM: string;
 
   /** Dashboard origin: where sign-in redirects back to, and the only CORS origin allowed. */
   @IsUrl(URL_OPTIONS)

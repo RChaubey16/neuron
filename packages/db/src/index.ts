@@ -2,7 +2,8 @@ import { PrismaPg } from '@prisma/adapter-pg';
 import { PrismaClient } from './generated/prisma/client.js';
 
 export { Prisma, PrismaClient } from './generated/prisma/client.js';
-export type { ApiKey, User } from './generated/prisma/client.js';
+export type { ApiKey, Message, User } from './generated/prisma/client.js';
+export { MessageStatus } from './generated/prisma/enums.js';
 
 /** How long to wait for a database connection before failing. */
 const CONNECTION_TIMEOUT_MS = 5_000;

@@ -1,6 +1,9 @@
+import { getQueueToken } from '@nestjs/bullmq';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { Test } from '@nestjs/testing';
+import { EMAIL_QUEUE, type SendEmailJobData } from '@neuron/core';
 import type { User } from '@neuron/db';
+import type { Queue } from 'bullmq';
 import { vi } from 'vitest';
 import { AppModule } from '../../src/app.module.js';
 import { configureApp } from '../../src/app.setup.js';
@@ -45,6 +48,7 @@ export interface TestApp {
   prisma: PrismaService;
   google: FakeGoogleOAuthService;
   auth: AuthService;
+  emailQueue: Queue<SendEmailJobData>;
 }
 
 export async function createTestApp(): Promise<TestApp> {
@@ -57,11 +61,22 @@ export async function createTestApp(): Promise<TestApp> {
   const app = configureApp(moduleRef.createNestApplication<NestExpressApplication>());
   await app.init();
 
-  return { app, prisma: app.get(PrismaService), google, auth: app.get(AuthService) };
+  return {
+    app,
+    prisma: app.get(PrismaService),
+    google,
+    auth: app.get(AuthService),
+    emailQueue: app.get<Queue<SendEmailJobData>>(getQueueToken(EMAIL_QUEUE)),
+  };
 }
 
 export async function resetDatabase(prisma: PrismaService): Promise<void> {
-  await prisma.$executeRawUnsafe('TRUNCATE TABLE "api_keys", "users" CASCADE');
+  await prisma.$executeRawUnsafe('TRUNCATE TABLE "messages", "api_keys", "users" CASCADE');
+}
+
+/** Removes every job from the queue (in the test Redis database). */
+export async function resetQueue(queue: Queue): Promise<void> {
+  await queue.obliterate({ force: true });
 }
 
 let userCounter = 0;

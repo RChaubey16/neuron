@@ -3,6 +3,8 @@ import { NodeEnv, parseEmailList, validateEnv } from './env.validation.js';
 
 const validEnv = {
   DATABASE_URL: 'postgresql://neuron:neuron@localhost:5432/neuron',
+  REDIS_URL: 'redis://localhost:6379',
+  EMAIL_FROM: 'Neuron <noreply@example.com>',
   WEB_URL: 'http://localhost:3000',
   GOOGLE_CLIENT_ID: 'client-id.apps.googleusercontent.com',
   GOOGLE_CLIENT_SECRET: 'client-secret',
@@ -37,6 +39,8 @@ describe('validateEnv', () => {
 
   it.each([
     'DATABASE_URL',
+    'REDIS_URL',
+    'EMAIL_FROM',
     'WEB_URL',
     'GOOGLE_CLIENT_ID',
     'GOOGLE_CLIENT_SECRET',
@@ -52,6 +56,10 @@ describe('validateEnv', () => {
 
   it.each([
     ['DATABASE_URL', 'mysql://localhost/neuron'],
+    ['REDIS_URL', 'localhost:6379'],
+    ['REDIS_URL', 'http://localhost:6379'],
+    ['EMAIL_FROM', 'not-an-email'],
+    ['EMAIL_FROM', 'Neuron <not-an-email>'],
     ['WEB_URL', 'localhost:3000'],
     ['WEB_URL', 'ftp://example.com'],
     ['GOOGLE_CALLBACK_URL', 'not a url'],
@@ -68,6 +76,19 @@ describe('validateEnv', () => {
     const env = validateEnv({ ...validEnv, ALLOWED_EMAILS: ' Me@Example.com ,you@example.com,' });
 
     expect(env.ALLOWED_EMAILS).toEqual(['me@example.com', 'you@example.com']);
+  });
+
+  it.each(['redis://localhost:6379', 'redis://:secret@redis:6379/2', 'rediss://user:pw@host:6380'])(
+    'accepts REDIS_URL=%j',
+    (url) => {
+      expect(validateEnv({ ...validEnv, REDIS_URL: url }).REDIS_URL).toBe(url);
+    },
+  );
+
+  it('accepts a bare EMAIL_FROM address', () => {
+    expect(validateEnv({ ...validEnv, EMAIL_FROM: 'noreply@example.com' }).EMAIL_FROM).toBe(
+      'noreply@example.com',
+    );
   });
 
   it('accepts a COOKIE_DOMAIN with a leading dot', () => {
