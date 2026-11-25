@@ -66,12 +66,12 @@ Prisma on Postgres, for schema, migrations and queries.
 
 All limits are defaults set in config, so they can be changed without code changes.
 
-| Limit                         | Default              | Why                                                                                   |
-| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------- |
-| Requests per API key          | 60 per minute, sliding window | Stops a buggy client loop from flooding the queue.                           |
-| Emails sent per user          | 500 per day          | Protects your Resend quota and your domain's sending reputation. Set it to your Resend plan's daily limit. |
-| Requests per IP (backup)      | 300 per minute       | Catches abuse that rotates or guesses API keys.                                       |
-| Failed auth attempts per IP   | 20 per minute        | Slows down attempts to guess API keys.                                                |
+| Limit                       | Default                       | Why                                                                                                        |
+| --------------------------- | ----------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| Requests per API key        | 60 per minute, sliding window | Stops a buggy client loop from flooding the queue.                                                         |
+| Emails sent per user        | 500 per day                   | Protects your Resend quota and your domain's sending reputation. Set it to your Resend plan's daily limit. |
+| Requests per IP (backup)    | 300 per minute                | Catches abuse that rotates or guesses API keys.                                                            |
+| Failed auth attempts per IP | 20 per minute                 | Slows down attempts to guess API keys.                                                                     |
 
 When a limit is hit, the API returns `429 Too Many Requests` with these headers:
 
@@ -133,19 +133,19 @@ When a limit is hit, the API returns `429 Too Many Requests` with these headers:
 
 Each step ends with something that runs, and is one feature branch, one commit and one PR (see `CLAUDE.md`).
 
-| #  | Feature | Branch | Commit message |
-| -- | ------- | ------ | -------------- |
-| 1  | Monorepo (pnpm workspaces and Turborepo) and Docker Compose with Postgres, Redis and Mailpit. | `feature/monorepo-setup` | `chore: set up monorepo with pnpm workspaces, Turborepo and Docker Compose` |
-| 2  | Prisma schema, Google sign-in and API key auth. | `feature/auth-and-api-keys` | `feat: add Prisma schema, Google sign-in and API key auth` |
-| 3  | `POST /v1/emails` writes the message and adds a job to the queue. | `feature/send-email-endpoint` | `feat: add POST /v1/emails endpoint that queues messages` |
-| 4  | The worker sends through `SmtpProvider` to Mailpit and updates the status. | `feature/email-worker` | `feat: add email worker with SMTP provider and status updates` |
-| 5  | `ResendProvider`, Dockerfiles and the first deploy to Coolify. | `feature/resend-and-deploy` | `feat: add Resend provider and Docker images for Coolify deploy` |
-| 6  | `GET /v1/emails/:id` and idempotency. | `feature/status-and-idempotency` | `feat: add message status endpoint and Idempotency-Key support` |
-| 7  | Retries, backoff, the dead-letter state and message events. | `feature/retries-and-events` | `feat: add retries with backoff, dead-letter state and message events` |
-| 8  | Rate limiting. | `feature/rate-limiting` | `security: add per-key, per-user and per-IP rate limiting` |
-| 9  | React Email templates with typed variables. | `feature/email-templates` | `feat: add React Email templates with typed variables` |
-| 10 | Next.js dashboard: sign-in, API keys, template previews and the message log. | `feature/dashboard` | `feat: add Next.js dashboard for API keys, templates and message log` |
-| 11 | README with the architecture diagram, and tests. | `feature/docs-and-tests` | `docs: add README with architecture diagram and fill test gaps` |
+| #   | Feature                                                                                       | Branch                           | Commit message                                                              |
+| --- | --------------------------------------------------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------- |
+| 1   | Monorepo (pnpm workspaces and Turborepo) and Docker Compose with Postgres, Redis and Mailpit. | `feature/monorepo-setup`         | `chore: set up monorepo with pnpm workspaces, Turborepo and Docker Compose` |
+| 2   | Prisma schema, Google sign-in and API key auth.                                               | `feature/auth-and-api-keys`      | `feat: add Prisma schema, Google sign-in and API key auth`                  |
+| 3   | `POST /v1/emails` writes the message and adds a job to the queue.                             | `feature/send-email-endpoint`    | `feat: add POST /v1/emails endpoint that queues messages`                   |
+| 4   | The worker sends through `SmtpProvider` to Mailpit and updates the status.                    | `feature/email-worker`           | `feat: add email worker with SMTP provider and status updates`              |
+| 5   | `ResendProvider`, Dockerfiles and the first deploy to Coolify.                                | `feature/resend-and-deploy`      | `feat: add Resend provider and Docker images for Coolify deploy`            |
+| 6   | `GET /v1/emails/:id` and idempotency.                                                         | `feature/status-and-idempotency` | `feat: add message status endpoint and Idempotency-Key support`             |
+| 7   | Retries, backoff, the dead-letter state and message events.                                   | `feature/retries-and-events`     | `feat: add retries with backoff, dead-letter state and message events`      |
+| 8   | Rate limiting.                                                                                | `feature/rate-limiting`          | `security: add per-key, per-user and per-IP rate limiting`                  |
+| 9   | React Email templates with typed variables.                                                   | `feature/email-templates`        | `feat: add React Email templates with typed variables`                      |
+| 10  | Next.js dashboard: sign-in, API keys, template previews and the message log.                  | `feature/dashboard`              | `feat: add Next.js dashboard for API keys, templates and message log`       |
+| 11  | README with the architecture diagram, and tests.                                              | `feature/docs-and-tests`         | `docs: add README with architecture diagram and fill test gaps`             |
 
 Every feature still ships with its own tests (per the completion checklist). Step 11 fills any gaps and adds end-to-end coverage, not the first tests.
 
