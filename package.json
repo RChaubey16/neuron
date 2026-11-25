@@ -1,0 +1,30 @@
+{
+  "name": "neuron",
+  "private": true,
+  "description": "Neuron: a notification system with an email API, queue-backed worker and dashboard.",
+  "packageManager": "pnpm@12.21.0",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "turbo run dev",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "check": "pnpm format:check && turbo run lint typecheck test",
+    "infra:up": "docker compose up -d --wait",
+    "infra:down": "docker compose down",
+    "infra:logs": "docker compose logs -f"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.0",
+    "eslint": "^9.39.0",
+    "prettier": "^3.10.1",
+    "turbo": "^2.11.13",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.74.0"
+  }
+}
