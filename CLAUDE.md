@@ -2,6 +2,14 @@
 
 Neuron is a notification system (email in phase 1, SMS in phase 2). The plan, decisions and build order are in `docs/neuron-phase-1-plan.md`.
 
+## Progress
+
+`PROGRESS.md` tracks where the build stands: each step's status and PR, what works, items carried forward to later steps, and decisions made while building.
+
+- Read `PROGRESS.md` at the start of every session before doing anything else.
+- Each feature's commit includes the `PROGRESS.md` update for that step: mark it in review with its PR link, update "What works today", tick or add "Carried forward" items, and record any decision that changes the plan.
+- When starting the next feature, first mark the previous step as merged.
+
 ## Development rules
 
 ### Branching
@@ -30,4 +38,4 @@ Neuron is a notification system (email in phase 1, SMS in phase 2). The plan, de
 
 ### Cycle
 
-Pull the latest `main` → create the `feature/<name>` branch → build → completion checklist → commit → push → PR to `main` → the user reviews and merges → next feature.
+Pull the latest `main` → create the `feature/<name>` branch → mark the previous step merged in `PROGRESS.md` → build → completion checklist → update `PROGRESS.md` → commit → push → PR to `main` → the user reviews and merges → next feature.
