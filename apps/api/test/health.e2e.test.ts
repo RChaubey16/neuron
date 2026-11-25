@@ -1,5 +1,6 @@
 import request from 'supertest';
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { RedisHealthService } from '../src/queues/redis-health.service.js';
 import { createTestApp, type TestApp } from './support/test-app.js';
 import { TEST_WEB_URL } from './support/test-env.mjs';
 
@@ -21,7 +22,7 @@ describe('API basics (e2e)', () => {
   it('GET /health returns ok when the database answers', async () => {
     const response = await request(t.app.getHttpServer()).get('/health').expect(200);
 
-    expect(response.body).toEqual({ status: 'ok', checks: { database: 'up' } });
+    expect(response.body).toEqual({ status: 'ok', checks: { database: 'up', redis: 'up' } });
   });
 
   it('GET /health returns 503 when the database is down', async () => {
@@ -30,7 +31,18 @@ describe('API basics (e2e)', () => {
 
     const response = await request(t.app.getHttpServer()).get('/health').expect(503);
 
-    expect(response.body).toEqual({ status: 'error', checks: { database: 'down' } });
+    expect(response.body).toEqual({ status: 'error', checks: { database: 'down', redis: 'up' } });
+  });
+
+  it('GET /health returns 503 when Redis is down', async () => {
+    vi.spyOn(t.app.get(RedisHealthService), 'ping').mockRejectedValueOnce(
+      new Error('Connection is closed.'),
+    );
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+
+    const response = await request(t.app.getHttpServer()).get('/health').expect(503);
+
+    expect(response.body).toEqual({ status: 'error', checks: { database: 'up', redis: 'down' } });
   });
 
   it('does not reveal the framework in headers', async () => {

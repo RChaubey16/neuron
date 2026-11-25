@@ -28,6 +28,16 @@ pnpm --filter @neuron/db db:deploy   # apply database migrations
 pnpm dev               # API on :4000, dashboard on :3000
 ```
 
+| Service   | Default address                                       |
+| --------- | ----------------------------------------------------- |
+| API       | http://localhost:4000 (health: `GET /health`)         |
+| Dashboard | http://localhost:3000                                 |
+| Postgres  | `localhost:5432`, user/password/db `neuron`           |
+| Redis     | `localhost:6379`                                      |
+| Mailpit   | SMTP `localhost:1025`, inbox at http://localhost:8025 |
+
+Stop the infrastructure with `pnpm infra:down` (data is kept in Docker volumes).
+
 ### Google sign-in
 
 The dashboard signs in with Google, and the API won't start until these are set in `.env`:
@@ -47,15 +57,27 @@ Edit `packages/db/prisma/schema.prisma`, then create and apply a migration:
 pnpm --filter @neuron/db db:migrate --name describe_the_change
 ```
 
-| Service   | Default address                                       |
-| --------- | ----------------------------------------------------- |
-| API       | http://localhost:4000 (health: `GET /health`)         |
-| Dashboard | http://localhost:3000                                 |
-| Postgres  | `localhost:5432`, user/password/db `neuron`           |
-| Redis     | `localhost:6379`                                      |
-| Mailpit   | SMTP `localhost:1025`, inbox at http://localhost:8025 |
+## Sending an email
 
-Stop the infrastructure with `pnpm infra:down` (data is kept in Docker volumes).
+Create an API key in the dashboard (or `POST /api-keys` while signed in), then:
+
+```sh
+curl -X POST http://localhost:4000/v1/emails \
+  -H "Authorization: Bearer nrn_..." \
+  -H "Content-Type: application/json" \
+  -d '{"to": "someone@example.com", "subject": "Hello", "html": "<p>Hello!</p>", "text": "Hello!"}'
+```
+
+The response is `202 Accepted` with `{"id": "...", "status": "queued"}`: the email is stored and queued, and the worker sends it.
+
+| Field     | Rules                                      |
+| --------- | ------------------------------------------ |
+| `to`      | One email address                          |
+| `subject` | 1–998 characters, no line breaks           |
+| `html`    | Required, up to 512 KiB                    |
+| `text`    | Optional plain-text version, up to 256 KiB |
+
+The sender is always `EMAIL_FROM`. Unknown fields (including `from`) are rejected with `400`. If the queue is unavailable the API answers `503` and the email is not sent; retrying is safe.
 
 ## Scripts
 

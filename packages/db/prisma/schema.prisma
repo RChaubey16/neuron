@@ -22,7 +22,8 @@ model User {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
   lastLoginAt DateTime @default(now()) @map("last_login_at") @db.Timestamptz(3)
 
-  apiKeys ApiKey[]
+  apiKeys  ApiKey[]
+  messages Message[]
 
   @@map("users")
 }
@@ -41,8 +42,49 @@ model ApiKey {
   revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
   createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages Message[]
 
   @@index([userId])
   @@map("api_keys")
+}
+
+/// Must match MESSAGE_STATUSES in packages/core (checked by a test in apps/api).
+enum MessageStatus {
+  queued
+  sending
+  sent
+  failed
+
+  @@map("message_status")
+}
+
+/// One email to one recipient, from the moment the API accepts it.
+model Message {
+  id                String        @id @default(uuid(7)) @db.Uuid
+  userId            String        @map("user_id") @db.Uuid
+  /// The key that sent it. Keys are revoked, never deleted, so this always resolves.
+  apiKeyId          String        @map("api_key_id") @db.Uuid
+  to                String        @db.VarChar(320)
+  /// Sender as configured when the message was accepted, e.g. `Neuron <noreply@example.com>`.
+  from              String
+  subject           String        @db.VarChar(998)
+  html              String
+  text              String?
+  status            MessageStatus @default(queued)
+  /// Send attempts made by the worker so far.
+  attempts          Int           @default(0)
+  /// The provider's ID for the email once sent (e.g. Resend's), for support and webhooks.
+  providerMessageId String?       @map("provider_message_id")
+  lastError         String?       @map("last_error")
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  sentAt            DateTime?     @map("sent_at") @db.Timestamptz(3)
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  apiKey ApiKey @relation(fields: [apiKeyId], references: [id], onDelete: Cascade)
+
+  /// The dashboard's message log: a user's messages, newest first.
+  @@index([userId, createdAt(sort: Desc)])
+  @@index([apiKeyId])
+  @@map("messages")
 }

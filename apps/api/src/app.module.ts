@@ -2,9 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { ApiKeysModule } from './api-keys/api-keys.module.js';
 import { AuthModule } from './auth/auth.module.js';
+import { EmailsModule } from './emails/emails.module.js';
 import { validateEnv } from './config/env.validation.js';
 import { HealthModule } from './health/health.module.js';
 import { PrismaModule } from './prisma/prisma.module.js';
+import { QueuesModule } from './queues/queues.module.js';
 
 @Module({
   imports: [
@@ -18,9 +20,11 @@ import { PrismaModule } from './prisma/prisma.module.js';
       validate: validateEnv,
     }),
     PrismaModule,
+    QueuesModule,
     HealthModule,
     AuthModule,
     ApiKeysModule,
+    EmailsModule,
   ],
 })
 export class AppModule {}

@@ -12,6 +12,10 @@ export function configureApp(app: NestExpressApplication): NestExpressApplicatio
   const config = app.get<ConfigService<EnvironmentVariables, true>>(ConfigService);
 
   app.disable('x-powered-by');
+
+  // Express's default JSON limit is 100 KB; emails can carry up to 512 KiB of
+  // HTML plus a text version. Larger bodies get 413 Payload Too Large.
+  app.useBodyParser('json', { limit: '1mb' });
   app.enableShutdownHooks();
 
   // The secret signs cookies that must not be tampered with (the OAuth state cookie).
