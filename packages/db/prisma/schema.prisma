@@ -1,0 +1,48 @@
+// Neuron database schema. Tables are added by the build step that needs them;
+// the full data model is in docs/neuron-phase-1-plan.md.
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+/// A person who signs in to the dashboard with Google.
+model User {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  googleId    String   @unique @map("google_id")
+  /// Stored lowercase.
+  email       String   @unique
+  name        String?
+  avatarUrl   String?  @map("avatar_url")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  lastLoginAt DateTime @default(now()) @map("last_login_at") @db.Timestamptz(3)
+
+  apiKeys ApiKey[]
+
+  @@map("users")
+}
+
+/// A key a client sends as `Authorization: Bearer <key>`. Only a SHA-256 hash
+/// of the key is stored; the full key is shown once, when it is created.
+model ApiKey {
+  id         String    @id @default(uuid(7)) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  name       String    @db.VarChar(64)
+  /// First characters of the key, shown in the dashboard to tell keys apart.
+  prefix     String    @db.VarChar(16)
+  /// Hex SHA-256 of the full key.
+  keyHash    String    @unique @map("key_hash") @db.Char(64)
+  lastUsedAt DateTime? @map("last_used_at") @db.Timestamptz(3)
+  revokedAt  DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("api_keys")
+}
