@@ -25,3 +25,6 @@ coverage/
 
 # Logs
 *.log
+
+# Prisma generated client
+**/src/generated/

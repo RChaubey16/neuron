@@ -1,0 +1,21 @@
+/**
+ * Environment for the API tests. Vitest sets these before any test runs, and
+ * they take precedence over the repo-root .env.
+ */
+export const TEST_DATABASE_URL =
+  process.env['TEST_DATABASE_URL'] ?? 'postgresql://neuron:neuron@localhost:5432/neuron_test';
+
+export const TEST_WEB_URL = 'http://localhost:3000';
+export const TEST_ALLOWED_EMAIL = 'allowed@example.com';
+export const TEST_SESSION_SECRET = 'test-session-secret-that-is-long-enough-1234';
+
+export const testEnv: Record<string, string> = {
+  NODE_ENV: 'test',
+  DATABASE_URL: TEST_DATABASE_URL,
+  WEB_URL: TEST_WEB_URL,
+  GOOGLE_CLIENT_ID: 'test-client-id.apps.googleusercontent.com',
+  GOOGLE_CLIENT_SECRET: 'test-client-secret',
+  GOOGLE_CALLBACK_URL: 'http://localhost:4000/auth/google/callback',
+  SESSION_SECRET: TEST_SESSION_SECRET,
+  ALLOWED_EMAILS: `${TEST_ALLOWED_EMAIL},second@example.com`,
+};

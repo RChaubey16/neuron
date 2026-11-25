@@ -5,7 +5,14 @@ import tseslint from 'typescript-eslint';
 
 export const baseConfig = tseslint.config(
   {
-    ignores: ['**/dist/**', '**/.next/**', '**/coverage/**', '**/node_modules/**', '**/*.config.*'],
+    ignores: [
+      '**/dist/**',
+      '**/.next/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      '**/generated/**',
+      '**/*.config.*',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.recommendedTypeChecked,

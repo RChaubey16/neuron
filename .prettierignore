@@ -4,3 +4,5 @@ coverage
 .turbo
 pnpm-lock.yaml
 next-env.d.ts
+**/src/generated
+**/prisma/migrations/**/*.sql

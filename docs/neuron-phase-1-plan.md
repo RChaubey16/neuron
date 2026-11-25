@@ -41,7 +41,8 @@ Decided on 2026-11-25.
 
 ### Dashboard sign-in: Google OAuth
 
-- The NestJS API handles the sign-in, using Passport with the Google strategy (`passport-google-oauth20`). The auth logic stays in the backend, which is the part of the project this is meant to show off.
+- The NestJS API handles the sign-in with Google's own library (`google-auth-library`): the authorization-code flow with PKCE, and the ID token verified on every sign-in. The auth logic stays in the backend, which is the part of the project this is meant to show off.
+- Not Passport: its Google strategy needs a server-side session store to check the OAuth `state`. Keeping `state` and the PKCE verifier in a short-lived signed cookie avoids that, and the flow is a small service that tests can replace.
 - After Google sign-in, the API sets a signed session token in an `httpOnly`, `Secure`, `SameSite=Lax` cookie. The dashboard sends it with every request to the API.
 - The dashboard and API sit on the same parent domain (e.g. `neuron.example.com` and `api.neuron.example.com`), so the cookie works for both.
 - **Who can sign in:** only Google accounts listed in an `ALLOWED_EMAILS` environment variable. Without this, any Google user could sign up and send email from your Resend domain. Open sign-up can come later.
@@ -125,7 +126,7 @@ When a limit is hit, the API returns `429 Too Many Requests` with these headers:
 
 - **Stack:** NestJS for the API, Next.js for the dashboard, a separate NestJS worker (`@nestjs/bullmq`), Postgres with Prisma, Redis and Resend.
 - **Package manager:** pnpm, with pnpm workspaces and Turborepo.
-- **Repo layout:** a monorepo with `apps/api` (NestJS), `apps/web` (Next.js dashboard), `apps/worker` and `packages/core`, so all three apps share types.
+- **Repo layout:** a monorepo with `apps/api` (NestJS), `apps/web` (Next.js dashboard), `apps/worker`, `packages/core` (types shared by all three apps) and `packages/db` (Prisma schema, migrations and client, shared by the API and worker; kept out of `packages/core` so the dashboard never bundles database code).
 - **Local setup:** Docker Compose (Postgres, Redis, Mailpit), with Mailpit catching emails during development.
 - **Docs and tests:** a README with an architecture diagram, and a few tests on the API and the worker.
 

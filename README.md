@@ -6,12 +6,13 @@ The plan, decisions and build order are in [`docs/neuron-phase-1-plan.md`](docs/
 
 ## Repo layout
 
-| Path            | What it is                                                  |
-| --------------- | ----------------------------------------------------------- |
-| `apps/api`      | HTTP API (NestJS)                                           |
-| `apps/web`      | Dashboard (Next.js)                                         |
-| `packages/core` | Types and constants shared by the API, worker and dashboard |
-| `apps/worker`   | Queue worker (NestJS), added in step 4 of the build order   |
+| Path            | What it is                                                         |
+| --------------- | ------------------------------------------------------------------ |
+| `apps/api`      | HTTP API (NestJS)                                                  |
+| `apps/web`      | Dashboard (Next.js)                                                |
+| `packages/core` | Types and constants shared by the API, worker and dashboard        |
+| `packages/db`   | Prisma schema, migrations and client, shared by the API and worker |
+| `apps/worker`   | Queue worker (NestJS), added in step 4 of the build order          |
 
 pnpm workspaces link the packages; Turborepo runs tasks across them in dependency order.
 
@@ -21,9 +22,29 @@ Requirements: Node 24 or newer, pnpm 12, Docker.
 
 ```sh
 pnpm install
-cp .env.example .env   # change ports here if the defaults clash with something
+cp .env.example .env   # then fill in the Google and session values (see below)
 pnpm infra:up          # Postgres, Redis and Mailpit; waits until all are healthy
+pnpm --filter @neuron/db db:deploy   # apply database migrations
 pnpm dev               # API on :4000, dashboard on :3000
+```
+
+### Google sign-in
+
+The dashboard signs in with Google, and the API won't start until these are set in `.env`:
+
+1. In Google Cloud Console, go to **APIs & Services > Credentials > Create credentials > OAuth client ID**, type **Web application**.
+2. Add `http://localhost:4000/auth/google/callback` as an **Authorized redirect URI**.
+3. Copy the client ID and secret into `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+4. Set `SESSION_SECRET` (`openssl rand -base64 48`) and `ALLOWED_EMAILS` (your Google email).
+
+Then open http://localhost:4000/auth/google to sign in.
+
+### Database changes
+
+Edit `packages/db/prisma/schema.prisma`, then create and apply a migration:
+
+```sh
+pnpm --filter @neuron/db db:migrate --name describe_the_change
 ```
 
 | Service   | Default address                                       |
@@ -40,12 +61,12 @@ Stop the infrastructure with `pnpm infra:down` (data is kept in Docker volumes).
 
 Run from the repo root:
 
-| Script           | Does                                                           |
-| ---------------- | -------------------------------------------------------------- |
-| `pnpm dev`       | Runs every app in watch mode                                   |
-| `pnpm build`     | Builds every package                                           |
-| `pnpm lint`      | ESLint                                                         |
-| `pnpm typecheck` | TypeScript, no output                                          |
-| `pnpm test`      | Vitest                                                         |
-| `pnpm format`    | Prettier, writes changes                                       |
-| `pnpm check`     | Format check, lint, typecheck and tests: run before committing |
+| Script           | Does                                                                           |
+| ---------------- | ------------------------------------------------------------------------------ |
+| `pnpm dev`       | Runs every app in watch mode                                                   |
+| `pnpm build`     | Builds every package                                                           |
+| `pnpm lint`      | ESLint                                                                         |
+| `pnpm typecheck` | TypeScript, no output                                                          |
+| `pnpm test`      | Vitest. The API tests need `pnpm infra:up` (they use a `neuron_test` database) |
+| `pnpm format`    | Prettier, writes changes                                                       |
+| `pnpm check`     | Format check, lint, typecheck and tests: run before committing                 |
