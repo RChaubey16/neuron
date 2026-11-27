@@ -12,7 +12,7 @@ The plan, decisions and build order are in [`docs/neuron-phase-1-plan.md`](docs/
 | `apps/web`      | Dashboard (Next.js)                                                |
 | `packages/core` | Types and constants shared by the API, worker and dashboard        |
 | `packages/db`   | Prisma schema, migrations and client, shared by the API and worker |
-| `apps/worker`   | Queue worker (NestJS), added in step 4 of the build order          |
+| `apps/worker`   | Queue worker (NestJS): sends queued emails and records the result  |
 
 pnpm workspaces link the packages; Turborepo runs tasks across them in dependency order.
 
@@ -25,7 +25,7 @@ pnpm install
 cp .env.example .env   # then fill in the Google and session values (see below)
 pnpm infra:up          # Postgres, Redis and Mailpit; waits until all are healthy
 pnpm --filter @neuron/db db:deploy   # apply database migrations
-pnpm dev               # API on :4000, dashboard on :3000
+pnpm dev               # API on :4000, dashboard on :3000, and the worker
 ```
 
 | Service   | Default address                                       |
@@ -68,7 +68,9 @@ curl -X POST http://localhost:4000/v1/emails \
   -d '{"to": "someone@example.com", "subject": "Hello", "html": "<p>Hello!</p>", "text": "Hello!"}'
 ```
 
-The response is `202 Accepted` with `{"id": "...", "status": "queued"}`: the email is stored and queued, and the worker sends it.
+The response is `202 Accepted` with `{"id": "...", "status": "queued"}`: the email is stored and queued, and the worker sends it. Locally it lands in Mailpit (http://localhost:8025, or your `MAILPIT_UI_PORT`).
+
+A message moves from `queued` to `sending` to `sent`, or to `failed` with the reason in `lastError`. Retries arrive in step 7; until then a failed send isn't retried.
 
 | Field     | Rules                                      |
 | --------- | ------------------------------------------ |
@@ -83,12 +85,12 @@ The sender is always `EMAIL_FROM`. Unknown fields (including `from`) are rejecte
 
 Run from the repo root:
 
-| Script           | Does                                                                           |
-| ---------------- | ------------------------------------------------------------------------------ |
-| `pnpm dev`       | Runs every app in watch mode                                                   |
-| `pnpm build`     | Builds every package                                                           |
-| `pnpm lint`      | ESLint                                                                         |
-| `pnpm typecheck` | TypeScript, no output                                                          |
-| `pnpm test`      | Vitest. The API tests need `pnpm infra:up` (they use a `neuron_test` database) |
-| `pnpm format`    | Prettier, writes changes                                                       |
-| `pnpm check`     | Format check, lint, typecheck and tests: run before committing                 |
+| Script           | Does                                                                                                                              |
+| ---------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `pnpm dev`       | Runs every app in watch mode                                                                                                      |
+| `pnpm build`     | Builds every package                                                                                                              |
+| `pnpm lint`      | ESLint                                                                                                                            |
+| `pnpm typecheck` | TypeScript, no output                                                                                                             |
+| `pnpm test`      | Vitest. API and worker tests need `pnpm infra:up`: they use their own test databases, and the worker's send real email to Mailpit |
+| `pnpm format`    | Prettier, writes changes                                                                                                          |
+| `pnpm check`     | Format check, lint, typecheck and tests: run before committing                                                                    |
