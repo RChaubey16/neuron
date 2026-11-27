@@ -31,6 +31,7 @@ pnpm dev               # API on :4000, dashboard on :3000, and the worker
 | Service   | Default address                                       |
 | --------- | ----------------------------------------------------- |
 | API       | http://localhost:4000 (health: `GET /health`)         |
+| Worker    | health: http://localhost:4001/health                  |
 | Dashboard | http://localhost:3000                                 |
 | Postgres  | `localhost:5432`, user/password/db `neuron`           |
 | Redis     | `localhost:6379`                                      |
@@ -80,6 +81,16 @@ A message moves from `queued` to `sending` to `sent`, or to `failed` with the re
 | `text`    | Optional plain-text version, up to 256 KiB |
 
 The sender is always `EMAIL_FROM`. Unknown fields (including `from`) are rejected with `400`. If the queue is unavailable the API answers `503` and the email is not sent; retrying is safe.
+
+## Deploying
+
+Production runs on a VPS with Coolify: one Docker image per app (`apps/*/Dockerfile`, built from the repo root with `turbo prune`), described in [`docker-compose.prod.yml`](docker-compose.prod.yml), with Coolify-managed Postgres and Redis and Resend sending the email. The step-by-step setup is in [`docs/deploy.md`](docs/deploy.md).
+
+To build and run an image locally:
+
+```sh
+docker build -f apps/api/Dockerfile -t neuron-api .   # or apps/worker, apps/web
+```
 
 ## Scripts
 

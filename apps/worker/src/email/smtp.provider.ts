@@ -1,4 +1,3 @@
-import type { OnModuleDestroy } from '@nestjs/common';
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { createTransport, type Transporter } from 'nodemailer';
@@ -9,7 +8,7 @@ import { MESSAGE_ID_HEADER, type EmailProvider, type OutgoingEmail } from './ema
 
 /** Sends email over SMTP with nodemailer. Locally this delivers to Mailpit. */
 @Injectable()
-export class SmtpProvider implements EmailProvider, OnModuleDestroy {
+export class SmtpProvider implements EmailProvider {
   readonly name = 'smtp';
   private readonly transport: Transporter<SMTPTransport.SentMessageInfo>;
 
@@ -48,7 +47,7 @@ export class SmtpProvider implements EmailProvider, OnModuleDestroy {
     return { providerMessageId: info.messageId };
   }
 
-  onModuleDestroy(): void {
+  close(): void {
     this.transport.close();
   }
 }

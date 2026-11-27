@@ -40,7 +40,7 @@ describe('SmtpProvider', () => {
     const provider = providerFor(await closedPort());
 
     await expect(provider.send(email)).rejects.toThrow(/ECONNREFUSED/);
-    provider.onModuleDestroy();
+    provider.close();
   });
 
   it('fails instead of waiting forever when the server never greets', async () => {
@@ -53,7 +53,7 @@ describe('SmtpProvider', () => {
     try {
       await expect(provider.send(email)).rejects.toThrow(/Greeting never received|timeout/i);
     } finally {
-      provider.onModuleDestroy();
+      provider.close();
       silent.close();
     }
   }, 15_000);
