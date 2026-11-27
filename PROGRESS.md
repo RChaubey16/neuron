@@ -3,7 +3,7 @@
 Where Neuron's build stands, so work can be picked up at any time. The plan and its decisions are in [`docs/neuron-phase-1-plan.md`](docs/neuron-phase-1-plan.md); the workflow rules are in [`CLAUDE.md`](CLAUDE.md).
 
 **Last updated:** 2026-11-27
-**Now:** step 5 is in review ([PR #5](https://github.com/RChaubey16/neuron/pull/5)). The first deploy to Coolify follows [`docs/deploy.md`](docs/deploy.md) and needs the VPS, a Resend domain and key, and the production Google redirect URI. Step 6 starts once the PR is merged.
+**Now:** step 5 is merged and deployed at https://neuron.ruturaj.xyz and https://api.neuron.ruturaj.xyz. [PR #6](https://github.com/RChaubey16/neuron/pull/6) (a fix, not a build step) joins the API and worker to Coolify's database network so it survives redeploys. Still to check: sign-in, an API key and a real Resend send in production. Step 6 starts after that.
 
 ## Build order
 
@@ -13,7 +13,7 @@ Where Neuron's build stands, so work can be picked up at any time. The plan and 
 | 2   | Prisma schema, Google sign-in, API key auth           | Merged      | [#2](https://github.com/RChaubey16/neuron/pull/2) |
 | 3   | `POST /v1/emails` queues messages                     | Merged      | [#3](https://github.com/RChaubey16/neuron/pull/3) |
 | 4   | Worker sends through Mailpit and updates status       | Merged      | [#4](https://github.com/RChaubey16/neuron/pull/4) |
-| 5   | Resend provider, Dockerfiles, first deploy to Coolify | In review   | [#5](https://github.com/RChaubey16/neuron/pull/5) |
+| 5   | Resend provider, Dockerfiles, first deploy to Coolify | Merged      | [#5](https://github.com/RChaubey16/neuron/pull/5) |
 | 6   | `GET /v1/emails/:id` and idempotency                  | Not started |                                                   |
 | 7   | Retries, backoff, dead-letter state, message events   | Not started |                                                   |
 | 8   | Rate limiting                                         | Not started |                                                   |
@@ -46,7 +46,8 @@ Things earlier steps left for later steps. Tick them off as they're handled.
 - [x] **Step 5:** the worker has no HTTP server, but the plan wants a health check Coolify can use. Decide how (e.g. a tiny health endpoint, or a Docker `HEALTHCHECK` command).
 - [x] **Step 5:** give the worker container a stop grace period, so it can finish in-flight emails after SIGTERM. It exits with code 143 after a clean stop, which is normal for NestJS.
 - [x] **Step 5:** use Node 24 in the Docker images. Prisma 7 warns that Node 26 isn't supported.
-- [ ] **Deploy:** do the first deploy with [`docs/deploy.md`](docs/deploy.md), including the second Google redirect URI (`https://api.<domain>/auth/google/callback`) and `COOKIE_DOMAIN`. Then send one email through Resend from the VPS, and check that Coolify gives the worker its 60-second stop grace period on a redeploy.
+- [x] **Deploy:** first deploy to Coolify (2026-11-27). The API applied its migrations and all three containers are healthy, after joining the API and worker to the `coolify` network ([PR #6](https://github.com/RChaubey16/neuron/pull/6)).
+- [ ] **Deploy:** after PR #6, redeploy and check the containers stay on the `coolify` network. Then sign in, create an API key, send one email through Resend, and check the worker logs a clean stop (`Worker stopped (SIGTERM)`) on a redeploy.
 - [x] **Step 5:** run `prisma migrate deploy` when the API container starts.
 - [ ] **Step 7:** today a failed send marks the message `failed` at once and the job isn't retried. Step 7 keeps the message in `sending` between attempts, marks it `failed` only when retries run out or the error is permanent (e.g. SMTP 5xx), and records each attempt in `message_events`.
 - [ ] **Step 7:** delivery is at-least-once. If a worker dies after the provider accepted an email but before the status update, BullMQ re-runs the stalled job and the email is sent twice. With Resend this is now handled for 24 hours by the idempotency key; SMTP has no equivalent. `ResendApiError` carries `statusCode` and `code` for telling permanent errors (most 4xx) from retryable ones (429, 5xx, timeouts).
@@ -77,6 +78,7 @@ Changes or additions to the plan, and why. Each is also explained in its PR.
 | 5    | Resend's idempotency key is the message ID                                  | A re-run job for an email Resend already accepted doesn't send it again (24-hour window)    |
 | 5    | Only the configured email provider is created                               | No Resend key is needed for SMTP, and no SMTP pool is opened when using Resend              |
 | 5    | Health checks report state; they don't restart containers                   | Coolify's docs only say its proxy stops routing to unhealthy containers; crashes restart    |
+| 5    | `api` and `worker` join Coolify's `coolify` network in the compose file     | Coolify gives each app its own network; the compose file is versioned, a UI setting isn't   |
 
 ## Picking the work up again
 
@@ -93,6 +95,7 @@ Changes or additions to the plan, and why. Each is also explained in its PR.
 
 ## Local machine notes
 
+- Production: Coolify 4.7.9 on the VPS (`ssh root@201.18.193.101` works from this machine). App UUID `lks9fxtgjifo3bieeugjslmm`; Postgres container `ajs9vapfxdgzjo9h163bavqg`, Redis `3leobonpttkgrvvn6qak8vjn`, both on the `coolify` network.
 - DDEV's router uses port 8025, so the local `.env` sets `MAILPIT_UI_PORT=8027`. The Mailpit inbox is at http://localhost:8027.
 - In Docker the worker exits with code 0 after a clean stop; run through `pnpm` locally it exits with 143.
 - The local `.env` has real Google OAuth credentials and isn't committed. `.env.example` lists every variable.

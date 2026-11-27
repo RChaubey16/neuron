@@ -45,13 +45,15 @@ Neither database needs a public port.
 
 1. New resource → your GitHub repository → branch `main`.
 2. Build pack: **Docker Compose**. Base directory `/`, compose file `/docker-compose.prod.yml`.
-3. Under Advanced, turn on **Connect to Predefined Network**, so the containers can reach the two databases by their internal URLs.
+3. Networking needs nothing set: `docker-compose.prod.yml` joins `api` and `worker` to Coolify's `coolify` network, where the databases run. (If your databases are on a different Coolify destination, change the network name at the bottom of that file.)
 4. Domains, one per service, with the container port:
    - `web`: `https://neuron.example.com:3000`
    - `api`: `https://api.neuron.example.com:4000`
    - `worker`: none.
 
-   Point both DNS names at the VPS. Coolify gets the HTTPS certificates.
+   Point both DNS names at the VPS. Coolify gets the HTTPS certificates. Remove any `www.` domain Coolify adds for a service unless it has a DNS record too, or Let's Encrypt keeps failing for it.
+
+   On Cloudflare, use **DNS only** for these records: Cloudflare's free certificate doesn't cover a name two levels deep like `api.neuron.example.com`.
 
 ## 4. Environment variables
 
@@ -110,6 +112,20 @@ await (
 ```
 
 The answer includes the key (`nrn_…`). It's shown only this once.
+
+## If something fails
+
+Container logs: open the application in Coolify → **Logs**, or on the server (Coolify's server terminal, or SSH):
+
+```sh
+docker ps -a --filter name=<app-uuid> --format 'table {{.Names}}\t{{.Status}}'
+docker logs --tail 60 <container-name>
+```
+
+- **The API keeps restarting with `P1001: Can't reach database server`:** the containers aren't on the databases' network. Check with `docker inspect -f '{{range $k,$v := .NetworkSettings.Networks}}{{$k}} {{end}}' <container>` that `api` and `worker` are on the same network as the Postgres container.
+- **The API exits with `Invalid environment variables`:** the log names each variable to fix.
+- **`curl` reports `SSL certificate problem`, and the certificate is `TRAEFIK DEFAULT CERT`:** the proxy has no healthy container for that domain yet, so it hasn't requested a certificate. Fix the container first; the certificate follows within a minute.
+- **Sign-in comes back with `?error=invalid_state`:** check `COOKIE_DOMAIN` and the domains. Google's `redirect_uri_mismatch` page means the redirect URI doesn't exactly match `GOOGLE_CALLBACK_URL`. `?error=not_allowed` means the email isn't in `ALLOWED_EMAILS`.
 
 ## How the containers behave
 
