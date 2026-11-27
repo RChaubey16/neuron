@@ -1,0 +1,67 @@
+# Production deployment of Neuron on Coolify (Docker Compose build pack).
+# Setup steps are in docs/deploy.md.
+#
+# Postgres and Redis are not in this file: they run as Coolify-managed databases
+# (with Coolify's backups on for Postgres). Turn on "Connect to Predefined
+# Network" for this resource so these services can reach them.
+#
+# Domains are set per service in Coolify's UI, with the container port:
+#   web: https://neuron.example.com:3000
+#   api: https://api.neuron.example.com:4000
+# The worker has no domain. No ports are published: Coolify's proxy routes the
+# domains to the containers.
+#
+# ${VAR:?} marks a variable Coolify requires before it deploys; the values are
+# set in Coolify's UI and never committed.
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    expose:
+      - '4000'
+    environment:
+      NODE_ENV: production
+      API_PORT: '4000'
+      DATABASE_URL: ${DATABASE_URL:?}
+      REDIS_URL: ${REDIS_URL:?}
+      EMAIL_FROM: ${EMAIL_FROM:?}
+      WEB_URL: ${WEB_URL:?}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID:?}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET:?}
+      GOOGLE_CALLBACK_URL: ${GOOGLE_CALLBACK_URL:?}
+      SESSION_SECRET: ${SESSION_SECRET:?}
+      ALLOWED_EMAILS: ${ALLOWED_EMAILS:?}
+      COOKIE_DOMAIN: ${COOKIE_DOMAIN:?}
+    # The image's HEALTHCHECK calls GET /health (Postgres and Redis).
+
+  worker:
+    build:
+      context: .
+      dockerfile: apps/worker/Dockerfile
+    restart: unless-stopped
+    # On a redeploy or stop, the worker gets SIGTERM, stops taking jobs and
+    # finishes the ones in progress. A send gives up after 30 seconds, so 60
+    # seconds is enough before Docker kills it.
+    stop_grace_period: 60s
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL:?}
+      REDIS_URL: ${REDIS_URL:?}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
+      EMAIL_PROVIDER: resend
+      RESEND_API_KEY: ${RESEND_API_KEY:?}
+    # The image's HEALTHCHECK calls GET /health on port 4001 inside the
+    # container (Postgres, Redis and the BullMQ worker).
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    restart: unless-stopped
+    expose:
+      - '3000'
+    environment:
+      NODE_ENV: production

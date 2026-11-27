@@ -3,6 +3,9 @@
   "version": "0.0.0",
   "private": true,
   "description": "Neuron queue worker (NestJS): sends queued messages.",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "nest build",
     "dev": "nest start --watch --preserveWatchOutput",
@@ -24,6 +27,7 @@
     "ioredis": "^6.1.0",
     "nodemailer": "^10.6.1",
     "reflect-metadata": "^0.2.2",
+    "resend": "^6.40.0",
     "rxjs": "^7.8.2"
   },
   "devDependencies": {

@@ -12,12 +12,14 @@ export interface OutgoingEmail {
 }
 
 /**
- * A service that actually sends email: SMTP (Mailpit locally) now, Resend in
- * step 5. EMAIL_PROVIDER picks one at startup.
+ * A service that actually sends email: SMTP (Mailpit locally) or Resend
+ * (production). EMAIL_PROVIDER picks one at startup.
  */
 export interface EmailProvider {
   readonly name: string;
   send(email: OutgoingEmail): Promise<DeliveryResult>;
+  /** Releases connections when the worker shuts down. */
+  close?(): void;
 }
 
 /** Injection token for the configured EmailProvider. */

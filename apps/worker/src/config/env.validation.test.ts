@@ -13,6 +13,7 @@ describe('validateEnv (worker)', () => {
     expect(env).toMatchObject({
       NODE_ENV: NodeEnv.Development,
       WORKER_CONCURRENCY: 5,
+      WORKER_HEALTH_PORT: 4001,
       EMAIL_PROVIDER: EmailProviderName.Smtp,
       SMTP_HOST: 'localhost',
       SMTP_PORT: 1025,
@@ -48,6 +49,8 @@ describe('validateEnv (worker)', () => {
     ['WORKER_CONCURRENCY', '51'],
     ['WORKER_CONCURRENCY', 'many'],
     ['EMAIL_PROVIDER', 'sendgrid'],
+    ['WORKER_HEALTH_PORT', '0'],
+    ['WORKER_HEALTH_PORT', 'health'],
     ['SMTP_HOST', ''],
     ['SMTP_PORT', '70000'],
     ['SMTP_SECURE', 'yes'],
@@ -60,5 +63,34 @@ describe('validateEnv (worker)', () => {
     expect(validateEnv({ ...validEnv, SMTP_USER: 'user', SMTP_PASSWORD: 'pw' }).SMTP_USER).toBe(
       'user',
     );
+  });
+
+  describe('EMAIL_PROVIDER=resend', () => {
+    const resendEnv = { ...validEnv, EMAIL_PROVIDER: 'resend' };
+
+    it('requires RESEND_API_KEY', () => {
+      expect(() => validateEnv(resendEnv)).toThrow(/RESEND_API_KEY is required/);
+    });
+
+    it('rejects a key that is not a Resend key', () => {
+      expect(() => validateEnv({ ...resendEnv, RESEND_API_KEY: 'sk_live_abc' })).toThrow(
+        /RESEND_API_KEY/,
+      );
+    });
+
+    it('accepts a Resend key and ignores the SMTP settings', () => {
+      const env = validateEnv({
+        ...resendEnv,
+        RESEND_API_KEY: 're_123abc',
+        SMTP_HOST: '',
+        SMTP_PORT: 'not-used',
+      });
+      expect(env.EMAIL_PROVIDER).toBe(EmailProviderName.Resend);
+      expect(env.RESEND_API_KEY).toBe('re_123abc');
+    });
+  });
+
+  it('does not need RESEND_API_KEY for SMTP', () => {
+    expect(validateEnv(validEnv).RESEND_API_KEY).toBeUndefined();
   });
 });

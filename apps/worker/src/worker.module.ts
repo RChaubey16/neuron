@@ -4,6 +4,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { EMAIL_QUEUE } from '@neuron/core';
 import { type EnvironmentVariables, validateEnv } from './config/env.validation.js';
 import { EmailModule } from './email/email.module.js';
+import { HealthServer } from './health/health.server.js';
 import { MessageSender } from './messages/message-sender.service.js';
 import { SendEmailProcessor } from './messages/send-email.processor.js';
 import { PrismaModule } from './prisma/prisma.service.js';
@@ -34,6 +35,6 @@ import { PrismaModule } from './prisma/prisma.service.js';
     BullModule.registerQueue({ name: EMAIL_QUEUE }),
     EmailModule,
   ],
-  providers: [MessageSender, SendEmailProcessor],
+  providers: [MessageSender, SendEmailProcessor, HealthServer],
 })
 export class WorkerModule {}

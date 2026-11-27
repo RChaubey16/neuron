@@ -4,7 +4,7 @@ import { Client } from 'pg';
 import { TEST_DATABASE_URL } from './test-env.mjs';
 
 /**
- * Runs once before the API tests: creates the test database if it doesn't
+ * Runs once before the worker tests: creates the test database if it doesn't
  * exist and applies every migration, so tests run against the real schema.
  * Needs the Docker Compose Postgres running (`pnpm infra:up`).
  */
@@ -23,7 +23,7 @@ export default async function setup(): Promise<void> {
     await admin.connect();
   } catch (error) {
     throw new Error(
-      `Can't reach Postgres for the API tests at ${url.host}. Start it with \`pnpm infra:up\`.\n${String(error)}`,
+      `Can't reach Postgres for the worker tests at ${url.host}. Start it with \`pnpm infra:up\`.\n${String(error)}`,
     );
   }
 

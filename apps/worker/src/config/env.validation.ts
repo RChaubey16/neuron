@@ -19,12 +19,14 @@ export enum NodeEnv {
   Test = 'test',
 }
 
-/** Which EmailProvider sends email. Resend is added in step 5. */
+/** Which EmailProvider sends email: SMTP (Mailpit locally) or Resend (production). */
 export enum EmailProviderName {
   Smtp = 'smtp',
+  Resend = 'resend',
 }
 
 const isSmtp = (env: EnvironmentVariables) => env.EMAIL_PROVIDER === EmailProviderName.Smtp;
+const isResend = (env: EnvironmentVariables) => env.EMAIL_PROVIDER === EmailProviderName.Resend;
 
 function parseBoolean({ value }: { value: unknown }): unknown {
   if (value === 'true') return true;
@@ -53,8 +55,23 @@ export class EnvironmentVariables {
   @Max(50)
   WORKER_CONCURRENCY: number = 5;
 
+  /** Port of the worker's health check (GET /health), used by Docker and Coolify. Not public. */
+  @Type(() => Number)
+  @IsInt()
+  @Min(1)
+  @Max(65535)
+  WORKER_HEALTH_PORT: number = 4001;
+
   @IsEnum(EmailProviderName)
   EMAIL_PROVIDER: EmailProviderName = EmailProviderName.Smtp;
+
+  // --- Resend (EMAIL_PROVIDER=resend). ---
+
+  @ValidateIf(isResend)
+  @Matches(/^re_\S+$/, {
+    message: 'RESEND_API_KEY is required when EMAIL_PROVIDER=resend and must start with re_',
+  })
+  RESEND_API_KEY?: string;
 
   // --- SMTP (EMAIL_PROVIDER=smtp). Locally this is Mailpit. ---
 
