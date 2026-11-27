@@ -99,7 +99,7 @@ Deploy. Then:
 
    The worker logs `Sent message … (provider ID …)`, the email appears in Resend's log, and it arrives.
 
-Until the dashboard exists (step 10), create the API key from the browser's console on any page of `api.neuron.example.com` while signed in. The request carries your session cookie:
+Until the dashboard exists (step 10), create the API key from the browser's console on any page of `api.neuron.example.com` while signed in (for example the `/auth/me` tab). The request carries your session cookie. Chrome blocks pasting into the console at first: type `allow pasting` and press Enter, then paste:
 
 ```js
 await (
@@ -127,9 +127,12 @@ docker logs --tail 60 <container-name>
 - **`curl` reports `SSL certificate problem`, and the certificate is `TRAEFIK DEFAULT CERT`:** the proxy has no healthy container for that domain yet, so it hasn't requested a certificate. Fix the container first; the certificate follows within a minute.
 - **Sign-in comes back with `?error=invalid_state`:** check `COOKIE_DOMAIN` and the domains. Google's `redirect_uri_mismatch` page means the redirect URI doesn't exactly match `GOOGLE_CALLBACK_URL`. `?error=not_allowed` means the email isn't in `ALLOWED_EMAILS`.
 
+- **Container logs disappear after a redeploy:** Coolify removes the old containers. To watch a container stop, follow its logs on the server (`docker logs -f <container-name>`) before you redeploy.
+
 ## How the containers behave
 
+- **Deploys:** Coolify stops the old containers before starting the new ones, so each deploy has a short gap (about 30 seconds on the first one). Requests to the API during the gap get a 503 from the proxy; jobs already queued are kept in Redis and sent once the new worker starts.
 - **Migrations:** the API container runs `prisma migrate deploy` before it starts the server. If a migration fails, the container exits instead of serving with an out-of-date schema; the error is in its logs.
 - **Health checks:** each image has a Docker `HEALTHCHECK`. The API checks `GET /health` (Postgres and Redis); the worker checks `GET /health` on port 4001 inside its container (Postgres, Redis and that the BullMQ worker is running); the dashboard checks that it serves its home page. Coolify shows the result, and its proxy stops routing to an unhealthy container. Docker restarts a container that crashes (`restart: unless-stopped`), but not one that is only unhealthy.
-- **Stopping the worker:** on a redeploy the worker gets SIGTERM, stops taking jobs, and finishes the ones in progress (each send gives up after 30 seconds). `stop_grace_period: 60s` gives it time before Docker kills it. Jobs still waiting stay in Redis and the new worker sends them. In Docker it exits with code 0 after a clean stop.
+- **Stopping the worker:** on a redeploy the worker gets SIGTERM, stops taking jobs, and finishes the ones in progress (each send gives up after 30 seconds). `stop_grace_period: 60s` gives it time before Docker kills it. Jobs still waiting stay in Redis and the new worker sends them. Its exit code is 0 or 143 (SIGTERM) after a clean stop; 137 means Docker killed it at the end of the grace period.
 - **Duplicate sends:** each email is sent to Resend with its message ID as the idempotency key. If a worker dies after Resend accepted an email but before it recorded `sent`, the job runs again and Resend returns the first email instead of sending a second (for up to 24 hours).
