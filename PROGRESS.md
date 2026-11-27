@@ -3,7 +3,7 @@
 Where Neuron's build stands, so work can be picked up at any time. The plan and its decisions are in [`docs/neuron-phase-1-plan.md`](docs/neuron-phase-1-plan.md); the workflow rules are in [`CLAUDE.md`](CLAUDE.md).
 
 **Last updated:** 2026-11-27
-**Now:** steps 1–5 are merged and Neuron is live at https://neuron.ruturaj.xyz (dashboard placeholder) and https://api.neuron.ruturaj.xyz. Production was checked end to end on 2026-11-27, including a real email through Resend. Next is step 6, which starts when the user gives the go-ahead.
+**Now:** steps 1–5 are merged and Neuron is live at https://neuron.ruturaj.xyz (dashboard placeholder) and https://api.neuron.ruturaj.xyz. Production was checked end to end on 2026-11-27, including a real email through Resend. CI for pull requests is in review ([PR #8](https://github.com/RChaubey16/neuron/pull/8)). Next is step 6, which starts when the user gives the go-ahead.
 
 ## Build order
 
@@ -35,6 +35,7 @@ Branch names and commit messages for each step are in the plan's build order. Fi
 - **Docker:** one image per app (`apps/*/Dockerfile`, Node 24 Alpine, `turbo prune`, non-root, with a `HEALTHCHECK`). The API image runs `prisma migrate deploy` before starting. Tested locally: all three containers healthy, migrations applied to an empty database, an email sent through the API and worker containers to Mailpit, and a clean worker stop with jobs in flight.
 - **Deploy files:** `docker-compose.prod.yml` for Coolify and the setup guide in `docs/deploy.md`.
 - **Production:** deployed on Coolify with Coolify-managed Postgres and Redis. Checked on 2026-11-27: all three containers healthy after a redeploy, `api` and `worker` on the `coolify` network, Let's Encrypt certificates on both domains, `GET /health` ok, migrations applied, Google sign-in, API key auth, a real email through Resend received, and a revoked key rejected with 401.
+- **CI:** `.github/workflows/ci.yml` runs on every PR to `main` and every push to `main`. Three jobs: `pnpm check` and `pnpm build` against the Docker Compose services; a check that the Prisma migrations match `schema.prisma` (`pnpm --filter @neuron/db db:check-migrations`, which needs `SHADOW_DATABASE_URL` pointing at an empty database it can wipe); and a build of each app's Docker image, not pushed.
 - **Health:** `GET /health` on the API checks Postgres and Redis; the worker's `GET /health` (port 4001, internal) also checks that the BullMQ worker is running.
 
 ## Carried forward
@@ -50,6 +51,8 @@ Things earlier steps left for later steps. Tick them off as they're handled.
 - [x] **Deploy:** first deploy to Coolify (2026-11-27). The API applied its migrations and all three containers are healthy, after joining the API and worker to the `coolify` network ([PR #6](https://github.com/RChaubey16/neuron/pull/6)).
 - [x] **Deploy:** after PR #6, a redeploy kept `api` and `worker` on the `coolify` network. Sign-in, API key auth and a real Resend send all work in production (2026-11-27).
 - [x] **Step 5:** run `prisma migrate deploy` when the API container starts.
+- [ ] **CI:** after PR #8 merges, protect `main` in GitHub (Settings > Branches): require a PR and the five CI checks (`Format, lint, typecheck, test, build`, `Migrations match the Prisma schema`, `Docker image (api)`, `(worker)`, `(web)`) to pass before merging.
+- [ ] **CI:** check whether Coolify deploys on every push to `main`. If so, switch it to a deploy webhook that CI calls only after `main` passes, and add a `GET /health` smoke check after the deploy.
 - [ ] **Step 7:** today a failed send marks the message `failed` at once and the job isn't retried. Step 7 keeps the message in `sending` between attempts, marks it `failed` only when retries run out or the error is permanent (e.g. SMTP 5xx), and records each attempt in `message_events`.
 - [ ] **Step 7:** delivery is at-least-once. If a worker dies after the provider accepted an email but before the status update, BullMQ re-runs the stalled job and the email is sent twice. With Resend this is now handled for 24 hours by the idempotency key; SMTP has no equivalent. `ResendApiError` carries `statusCode` and `code` for telling permanent errors (most 4xx) from retryable ones (429, 5xx, timeouts).
 - [ ] **Step 7:** confirm the worker stops cleanly in production. On the redeploy of 2026-11-27 it got SIGTERM and exited within a second with code 143 (not killed at the end of the grace period), but its logs were removed with the container, so `Worker stopped (SIGTERM)` wasn't seen. Follow its logs during a redeploy (`docker logs -f <worker>` on the server), ideally with emails in flight, since retries depend on it.
@@ -63,24 +66,26 @@ Things earlier steps left for later steps. Tick them off as they're handled.
 
 Changes or additions to the plan, and why. Each is also explained in its PR.
 
-| Step | Decision                                                                    | Why                                                                                         |
-| ---- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 1    | TypeScript 6.0 and ESLint 9, not 7 and 10                                   | typescript-eslint and `eslint-config-next`'s plugins don't support the newer versions yet   |
-| 2    | `packages/db` holds the Prisma schema, migrations and client                | Shared by the API and worker; kept out of `packages/core` so the dashboard never bundles it |
-| 2    | `google-auth-library` instead of Passport                                   | Passport's Google strategy needs a server-side session store to check the OAuth `state`     |
-| 2    | Prisma 7.10.1                                                               | npm's `latest` tag points at an 8.0 release candidate                                       |
-| 2    | API keys hashed with SHA-256, not bcrypt                                    | Keys have 256 bits of entropy; a fast hash allows an indexed lookup per request             |
-| 3    | Raw HTML only until step 9; one recipient per message                       | No stub for templates; one clear status per message                                         |
-| 3    | `ioredis` added alongside BullMQ 6                                          | BullMQ 6 no longer bundles a Redis client                                                   |
-| 4    | nodemailer 10 with `@types/nodemailer` 8                                    | No types ship with nodemailer 10; its changelog says it keeps the `@types` layout working   |
-| 4    | Each app's tests get their own Postgres database and Redis DB number        | Turborepo runs the API and worker test suites at the same time                              |
-| 4    | A message is claimed with a conditional update (`queued` or `sending` only) | Skips messages already failed or sent, in the same query that counts the attempt            |
-| 5    | The worker's health check is a small HTTP server on internal port 4001      | Coolify reads Docker health checks; an HTTP check can also report the BullMQ worker's state |
-| 5    | Migrations run in the API container's entrypoint, with the Prisma CLI       | No separate migration service; the CLI adds about 370 MB to the API image                   |
-| 5    | Resend's idempotency key is the message ID                                  | A re-run job for an email Resend already accepted doesn't send it again (24-hour window)    |
-| 5    | Only the configured email provider is created                               | No Resend key is needed for SMTP, and no SMTP pool is opened when using Resend              |
-| 5    | Health checks report state; they don't restart containers                   | Coolify's docs only say its proxy stops routing to unhealthy containers; crashes restart    |
-| 5    | `api` and `worker` join Coolify's `coolify` network in the compose file     | Coolify gives each app its own network; the compose file is versioned, a UI setting isn't   |
+| Step | Decision                                                                       | Why                                                                                             |
+| ---- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------- |
+| 1    | TypeScript 6.0 and ESLint 9, not 7 and 10                                      | typescript-eslint and `eslint-config-next`'s plugins don't support the newer versions yet       |
+| 2    | `packages/db` holds the Prisma schema, migrations and client                   | Shared by the API and worker; kept out of `packages/core` so the dashboard never bundles it     |
+| 2    | `google-auth-library` instead of Passport                                      | Passport's Google strategy needs a server-side session store to check the OAuth `state`         |
+| 2    | Prisma 7.10.1                                                                  | npm's `latest` tag points at an 8.0 release candidate                                           |
+| 2    | API keys hashed with SHA-256, not bcrypt                                       | Keys have 256 bits of entropy; a fast hash allows an indexed lookup per request                 |
+| 3    | Raw HTML only until step 9; one recipient per message                          | No stub for templates; one clear status per message                                             |
+| 3    | `ioredis` added alongside BullMQ 6                                             | BullMQ 6 no longer bundles a Redis client                                                       |
+| 4    | nodemailer 10 with `@types/nodemailer` 8                                       | No types ship with nodemailer 10; its changelog says it keeps the `@types` layout working       |
+| 4    | Each app's tests get their own Postgres database and Redis DB number           | Turborepo runs the API and worker test suites at the same time                                  |
+| 4    | A message is claimed with a conditional update (`queued` or `sending` only)    | Skips messages already failed or sent, in the same query that counts the attempt                |
+| 5    | The worker's health check is a small HTTP server on internal port 4001         | Coolify reads Docker health checks; an HTTP check can also report the BullMQ worker's state     |
+| 5    | Migrations run in the API container's entrypoint, with the Prisma CLI          | No separate migration service; the CLI adds about 370 MB to the API image                       |
+| 5    | Resend's idempotency key is the message ID                                     | A re-run job for an email Resend already accepted doesn't send it again (24-hour window)        |
+| 5    | Only the configured email provider is created                                  | No Resend key is needed for SMTP, and no SMTP pool is opened when using Resend                  |
+| 5    | Health checks report state; they don't restart containers                      | Coolify's docs only say its proxy stops routing to unhealthy containers; crashes restart        |
+| 5    | `api` and `worker` join Coolify's `coolify` network in the compose file        | Coolify gives each app its own network; the compose file is versioned, a UI setting isn't       |
+| CI   | CI starts its services with `docker compose up`, not GitHub service containers | Service containers can't pass Redis's `noeviction` flag, and CI runs the same versions as local |
+| CI   | The Docker image builds run on every PR, not only when Dockerfiles change      | A required check that is skipped by a path filter never reports, and blocks the merge           |
 
 ## Picking the work up again
 
