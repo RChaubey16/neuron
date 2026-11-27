@@ -2,7 +2,9 @@
 
 A notification system: an email API with a queue-backed worker and a dashboard. SMS comes in phase 2.
 
-The plan, decisions and build order are in [`docs/neuron-phase-1-plan.md`](docs/neuron-phase-1-plan.md).
+The plan, decisions and build order are in [`docs/neuron-phase-1-plan.md`](docs/neuron-phase-1-plan.md), and where the build stands is in [`PROGRESS.md`](PROGRESS.md).
+
+Running in production at https://api.neuron.ruturaj.xyz (API) and https://neuron.ruturaj.xyz (dashboard).
 
 ## Repo layout
 
