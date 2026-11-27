@@ -2,8 +2,10 @@
 # Setup steps are in docs/deploy.md.
 #
 # Postgres and Redis are not in this file: they run as Coolify-managed databases
-# (with Coolify's backups on for Postgres). Turn on "Connect to Predefined
-# Network" for this resource so these services can reach them.
+# (with Coolify's backups on for Postgres) on Coolify's `coolify` Docker network.
+# Coolify puts this app on its own network, so `api` and `worker` also join
+# `coolify` (declared at the bottom) to reach the databases by their internal
+# URLs. `web` doesn't use the databases and stays off it.
 #
 # Domains are set per service in Coolify's UI, with the container port:
 #   web: https://neuron.example.com:3000
@@ -35,6 +37,8 @@ services:
       SESSION_SECRET: ${SESSION_SECRET:?}
       ALLOWED_EMAILS: ${ALLOWED_EMAILS:?}
       COOKIE_DOMAIN: ${COOKIE_DOMAIN:?}
+    networks:
+      - coolify
     # The image's HEALTHCHECK calls GET /health (Postgres and Redis).
 
   worker:
@@ -53,6 +57,8 @@ services:
       WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-5}
       EMAIL_PROVIDER: resend
       RESEND_API_KEY: ${RESEND_API_KEY:?}
+    networks:
+      - coolify
     # The image's HEALTHCHECK calls GET /health on port 4001 inside the
     # container (Postgres, Redis and the BullMQ worker).
 
@@ -65,3 +71,9 @@ services:
       - '3000'
     environment:
       NODE_ENV: production
+
+networks:
+  # The network Coolify's databases run on. Coolify still adds this app's own
+  # network to every service, which its proxy uses to reach `api` and `web`.
+  coolify:
+    external: true
